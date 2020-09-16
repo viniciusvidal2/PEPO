@@ -34,14 +34,11 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/conditional_removal.h>
-#include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/surface/mls.h>
-#include <pcl/segmentation/extract_clusters.h>
-#include <pcl/segmentation/conditional_euclidean_clustering.h>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -82,44 +79,37 @@ public:
   virtual ~ProcessCloud();
   void calculateNormals(PointCloud<PointT>::Ptr in, PointCloud<PointTN>::Ptr acc_normal);
   void calculateNormals(PointCloud<PointTN>::Ptr acc_normal);
+  void colorCloudThroughDistance(PointCloud<PointTN>::Ptr nuvem);
   void transformToCameraFrame(PointCloud<PointTN>::Ptr nuvem);
   void transformToCameraFrame(PointCloud<PointT>::Ptr nuvem);
   void transformCloudServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, nav_msgs::Odometry &msg, Eigen::Matrix4f &T, Eigen::Vector3f &C);
+  void createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, std::string nome, int w, int h);
   void saveCloud(PointCloud<PointTN>::Ptr nuvem, string nome);
   void saveCloud(PointCloud<PointT>::Ptr nuvem, string nome);
   void saveImage(cv::Mat img, std::string nome);
-  void filterCloudDepthCovariance(PointCloud<PointT >::Ptr cloud, int kn, float thresh, float depth);
-  void filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, int kn, float thresh, float depth);
-  void preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::Ptr out, float vs, float d, int fp, float &tempo_cor, float &tempo_octree, float &tempo_demaisfiltros, float &tempo_normais);
-  void transformCloudAndCamServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, Vector3f &C, Quaternion<float> &q);
+  void filterCloudDepthCovariance(PointCloud<PointT >::Ptr cloud, int kn, float thresh);
+  void filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, int kn, float thresh);
 
-  void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, Mat image, float scale);
-  void colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, Mat image, float scale);
+  Mat projectCloudToLaserCenter(PointCloud<PointTN>::Ptr cloud, float fx, float fy, float tx, float ty, Size s);
+  void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, Mat image, float fx, float fy);
+  void colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, Mat image, float fx, float fy);
+  void applyPolynomialFilter(vector<PointCloud<PointT>> vetor_nuvens_in, vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r);
 
-  void blueprint(PointCloud<PointTN>::Ptr cloud_in, float sa, float sr, Mat &bp);
-
-  void compileFinalNVM(vector<string> linhas);
-  void compileFinalSFM(vector<string> linhas);
-  string escreve_linha_nvm(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q);
-  string escreve_linha_sfm(string nome, Matrix3f r, Vector3f t);
-
-  Eigen::Matrix3f euler2matrix(float r, float p, float y);
-
-  MatrixXf getRtcam();
-  Vector3f gettCam();
+  void writeNVM(std::string nome, std::string nome_imagem, Eigen::VectorXf params);
+  void compileFinalNVM(vector<std::string> linhas);
+  std::string escreve_linha_imagem(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q);
 
 private:
-
-  void divideInOctreeLevels(PointCloud<PointT>::Ptr cloud, vector<PointCloud<PointT>> &leafs, float level);
-  void removeNotProjectedThroughDefinedColor(PointCloud<PointT>::Ptr cloud, int r, int g, int b);
+  /// Metodos
+  float normaldist(float x, float media, float dev);
+  Eigen::Matrix3f euler2matrix(float r, float p, float y);
+  Mat correctColorCluster(Mat in);
+  Vec3b findPredominantColor(int u, int v, Mat in, int desvio);
 
   /// Variaveis
-  Matrix3f K1;
-  Matrix3f K2;
-  MatrixXf Rt1;
-  Matrix3f K4;
-  MatrixXf Rt4;
-  string pasta;     // Nome da pasta a salvar as coisas
+  Eigen::Matrix3f K_cam; // Parametros intrinsecos da camera
+  int cam_w, cam_h;      // Dimensoes da camera
+  std::string pasta;     // Nome da pasta a salvar as coisas
 
 };
 

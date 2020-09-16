@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package>
-  <name>fog</name>
+  <name>clusters</name>
   <version>0.1.0</version>
-  <description>The fog package</description>
+  <description>The laser_camera package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -22,10 +22,6 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>nav_msgs</build_depend>
   <build_depend>pcl_ros</build_depend>
-  <build_depend>tf2_ros</build_depend>
-  <build_depend>pcl_conversions</build_depend>
-  <build_depend>message_generation</build_depend>
-  <build_depend>message_filters</build_depend>
 
 <run_depend>roscpp</run_depend>
 <run_depend>libqt4-dev</run_depend>
@@ -34,9 +30,5 @@
 <run_depend>std_msgs</run_depend>
 <run_depend>nav_msgs</run_depend>
 <run_depend>pcl_ros</run_depend>
-<run_depend>tf2_ros</run_depend>
-<run_depend>pcl_conversions</run_depend>
-<run_depend>message_generation</run_depend>
-<run_depend>message_filters</run_depend>
 
 </package>
