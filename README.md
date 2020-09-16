@@ -1,27 +1,20 @@
 # PEPO
-This is a repository for the 3D Scanner called PEPO, developed for the Project "Virtual". It is composed of an embedded NVidia Jetson Nano board, a Livox MID-40 lidar sensor, a Full HD Logitech USB camera, Dynamixel servo motors and a wireless router, everything meant to reconstruct objects and the whole environment around it!
+Codigos para funcionamento e controle do scanner 3D PEPO
 
-This repository is dedicated to the Fog node of the architecture, so everything is developed for a regular laptop running Ubuntu 16 and ROS Kinetic. If you are interested in the Edge node environment (embedded), take a look in our [EDGE repository](https://github.com/viniciusvidal2/PEPO_Embarcado).
+## livox_ros_driver
+Driver para funcionar o laser da Livox, lembrar de baixar o SDK do laser e acertar o ip do computador para estático, de preferência 192.169.1.40
 
-Check out a picture of the first prototype developed by Antonio, a member of our team.
+## libraries
+Pasta com classes para executar rotinas em qualquer pacote do projeto
 
-![robot](https://github.com/viniciusvidal2/PEPO/blob/fog/images/IMG_20200429_173151016.jpg)
+## usb_cam
+Driver para ler câmera webcam
 
-## Developer team
-  * [Vinicius Vidal](https://www.linkedin.com/in/vinicius-vidal-2a6834b1/)
-  * [Juliano Masson](https://www.linkedin.com/in/juliano-emir-nunes-masson-9bb99415b/)
-  * [Maria Julia Aguiar](https://www.linkedin.com/in/mariajuliarosaaguiar/)
-  * [Amanda Timotheo](https://www.linkedin.com/in/amanda-timotheo-1a68b9146/)
-  * [Antonio Pancotti](https://www.linkedin.com/in/vinicius-vidal-2a6834b1/)
-  * [Mathaus Silva](https://www.linkedin.com/in/mathaus-ferreira-779674a1/)
-  ### Project Coordinator:
-  * [Leonardo Honorio](https://www.linkedin.com/in/leonardo-hon%C3%B3rio-205991ba/)
-  
+## laser_camera
+Pacote com tudo que e necessario para ler topicos de laser e camera e processar os dados entregando o produto final em nuvem de pontos e imagens
 
-## Main branches
+## accumulate_point_cloud
+Pacote para acumular nuvem do laser e reconhecer movimentos na cena - Maria Julia e Amanda
 
-### fog branch
-
-### cluster branch
-
-### projeta_esfera 
+## panoramica_esfera
+Pacote para gerar imagens panorâmicas esféricas utilizando multi-band blending

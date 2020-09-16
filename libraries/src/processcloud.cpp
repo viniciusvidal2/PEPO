@@ -1,14 +1,18 @@
 #include "../include/processcloud.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-ProcessCloud::ProcessCloud(string p):pasta(p)
+ProcessCloud::ProcessCloud()
 {
     // Dimensoes da camera USB de entrada
-    cam_w = 1920; cam_h = 1080;
+    cam_w = 3840; cam_h = 2160;
     // Inicia matriz intrinseca da camera USB
-    K_cam << 1130,  0.0, float(cam_w)/2,//432.741036,
-             0.00, 1130, float(cam_h)/2,//412.362072,
-             0.00,  0.0,   1.000000;
+    K_cam << 2182.371971,    0.000000, float(cam_w)/2,//432.741036,
+                0.000000, 2163.572540, float(cam_h)/2,//412.362072,
+                0.000000,    0.000000,   1.000000;
+    // Inicia nome da pasta -> criar pasta no Dados_B9 no DESKTOP!
+    char* home;
+    home = getenv("HOME");
+    pasta = std::string(home)+"/Desktop/Dados_B9/";
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 ProcessCloud::~ProcessCloud(){
@@ -148,7 +152,6 @@ void ProcessCloud::createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, strin
     // Salva de uma vez a foto do laser
     saveImage(fl, nome);
 }
-
 /////////////////////////////////////////////////////////////////////////////////////////////////
 Mat ProcessCloud::projectCloudToLaserCenter(PointCloud<PointTN>::Ptr cloud, float fx, float fy, float tx, float ty, Size s){
     Mat image = Mat::zeros(s, CV_8UC3);
@@ -187,60 +190,26 @@ Mat ProcessCloud::projectCloudToLaserCenter(PointCloud<PointTN>::Ptr cloud, floa
     return image;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, Mat image, float fx, float fy){
+void ProcessCloud::colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, PointCloud<PointTN>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty){
     // Matriz intrinseca e extrinseca
-    Matrix3f K;
-    K << fx,  0, 973,//image.cols/2.0,
-          0, fy, 536,//image.rows/2.0,
-          0,  0,      1      ;
-    MatrixXf Rt(3, 4); // Desenho do antonio - diferenca no frame da camera do laser para a camera
-    Rt << 1, 0, 0,  0.01 ,
-          0, 1, 0,  0.0448,
-          0, 0, 1,  0.023;
-    MatrixXf P(3, 4);
-    P = K*Rt;
-    for(size_t i = 0; i < cloud_in->size(); i++){
-        // Pegar ponto em coordenadas homogeneas
-        MatrixXf X_(4, 1);
-        X_ << cloud_in->points[i].x,
-              cloud_in->points[i].y,
-              cloud_in->points[i].z,
-                        1          ;
-        MatrixXf X(3, 1);
-        X = P*X_;
-        if(X(2, 0) > 0){
-            X = X/X(2, 0);
-            // Colorindo ponto se for o caso de projetado corretamente
-            if(floor(X(0,0)) > 0 && floor(X(0,0)) < image.cols && floor(X(1,0)) > 0 && floor(X(1,0)) < image.rows){
-                cv::Vec3b cor = image.at<Vec3b>(Point(X(0,0), X(1,0)));
-                PointT point = cloud_in->points[i];
-                point.b = cor.val[0]; point.g = cor.val[1]; point.r = cor.val[2];
-                cloud_in->points[i] = point;
-            }
-        }
-    }
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, Mat image, float fx, float fy){
-    // Matriz intrinseca e extrinseca
-    Matrix3f K;
+    Eigen::Matrix3f K;
     K << fx,  0, image.cols/2.0,
           0, fy, image.rows/2.0,
           0,  0,      1      ;
-    MatrixXf Rt(3, 4); // Desenho do antonio - diferenca no frame da camera do laser para a camera
-    Rt << 1, 0, 0,  0.01 ,
-          0, 1, 0,  0.0448,
-          0, 0, 1,  0.023;
-    MatrixXf P(3, 4);
+    Eigen::MatrixXf Rt(3, 4);
+    Rt << 1, 0, 0, tx/100.0,
+          0, 1, 0, ty/100.0,
+          0, 0, 1,    0    ;
+    Eigen::MatrixXf P(3, 4);
     P = K*Rt;
     for(size_t i = 0; i < cloud_in->size(); i++){
         // Pegar ponto em coordenadas homogeneas
-        MatrixXf X_(4, 1);
+        Eigen::MatrixXf X_(4, 1);
         X_ << cloud_in->points[i].x,
               cloud_in->points[i].y,
               cloud_in->points[i].z,
                         1          ;
-        MatrixXf X(3, 1);
+        Eigen::MatrixXf X(3, 1);
         X = P*X_;
         if(X(2, 0) > 0){
             X = X/X(2, 0);
@@ -249,63 +218,44 @@ void ProcessCloud::colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_
                 cv::Vec3b cor = image.at<Vec3b>(Point(X(0,0), X(1,0)));
                 PointTN point = cloud_in->points[i];
                 point.b = cor.val[0]; point.g = cor.val[1]; point.r = cor.val[2];
-                cloud_in->points[i] = point;
+                cloud_out->push_back(point);
             }
         }
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::filterCloudDepthCovariance(PointCloud<PointT>::Ptr cloud, int kn, float thresh){
-    // Objetos para filtrar
-    ExtractIndices<PointT> extract;
-    PointIndices::Ptr outliers (new PointIndices);
-    PointCloud<PointT>::Ptr marcar_outliers (new PointCloud<PointT>);
-    marcar_outliers->resize(cloud->size());
-    // Objetos para procurar na nuvem o centroide e a covariancia
-    KdTreeFLANN<PointT>::Ptr tree (new KdTreeFLANN<PointT>);
-    tree->setInputCloud(cloud);
-    // Varrer todos os pontos atras da covariancia
-    #pragma omp parallel for
-    for(size_t i=0; i<cloud->size(); i++){
-        // Cria variaveis aqui dentro pelo processo ser paralelizado
-        Eigen::Vector4f centroide;
-        Eigen::Matrix4f rotacao_radial;
-        Eigen::Matrix3f covariancia;
-        rotacao_radial = Eigen::Matrix4f::Identity();
-        // Calcula angulo para rotacionar a nuvem e cria matriz de rotacao (yaw em torno de Y, pitch em torno de X)
-        float yaw_y   = atan2(cloud->points[i].x, cloud->points[i].z);
-        float pitch_x = atan2(cloud->points[i].x, cloud->points[i].z);
-        Eigen::Matrix3f rot = this->euler2matrix(0, pitch_x, yaw_y);
-        rotacao_radial.block<3,3>(0, 0) << rot.inverse();
-        // Calcula vizinhos mais proximos aqui por raio ou K neighbors
-        vector<int> indices_vizinhos;
-        vector<float> distancias_vizinhos;
-        tree->nearestKSearch(int(i), kn, indices_vizinhos, distancias_vizinhos);
-        // Separa nuvem com esses vizinhos
-        PointCloud<PointT>::Ptr temp (new PointCloud<PointT>);
-        temp->resize(indices_vizinhos.size());
-        for(size_t j=0; j<indices_vizinhos.size(); j++)
-            temp->points[j] = cloud->points[ indices_vizinhos[j] ];
-        // Rotaciona a nuvem separada segundo o raio que sai do centro do laser (origem)
-        transformPointCloud(*temp, *temp, rotacao_radial);
-        // Calcula centroide e covariancia da nuvem
-        compute3DCentroid(*temp, centroide);
-        computeCovarianceMatrix(*temp, centroide, covariancia);
-        // Se for muito maior em z que em x e y, considera ruim e marca na nuvem
-        if(covariancia(2, 2) > thresh*covariancia(0, 0) && covariancia(2, 2) > thresh*covariancia(1, 1))
-            marcar_outliers->points[i].x = 1;
+void ProcessCloud::colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, PointCloud<PointT>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty){
+    // Matriz intrinseca e extrinseca
+    Eigen::Matrix3f K;
+    K << fx,  0, image.cols/2.0,
+          0, fy, image.rows/2.0,
+          0,  0,      1      ;
+    Eigen::MatrixXf Rt(3, 4);
+    Rt << 1, 0, 0, tx/100.0,
+          0, 1, 0, ty/100.0,
+          0, 0, 1,    0    ;
+    Eigen::MatrixXf P(3, 4);
+    P = K*Rt;
+    for(size_t i = 0; i < cloud_in->size(); i++){
+        // Pegar ponto em coordenadas homogeneas
+        Eigen::MatrixXf X_(4, 1);
+        X_ << cloud_in->points[i].x,
+              cloud_in->points[i].y,
+              cloud_in->points[i].z,
+                        1          ;
+        Eigen::MatrixXf X(3, 1);
+        X = P*X_;
+        if(X(2, 0) > 0){
+            X = X/X(2, 0);
+            // Adicionando ponto na imagem se for o caso de projetado corretamente
+            if(floor(X(0,0)) > 0 && floor(X(0,0)) < image.cols && floor(X(1,0)) > 0 && floor(X(1,0)) < image.rows){
+                cv::Vec3b cor = image.at<Vec3b>(Point(X(0,0), X(1,0)));
+                PointT point = cloud_in->points[i];
+                point.b = cor.val[0]; point.g = cor.val[1]; point.r = cor.val[2];
+                cloud_out->push_back(point);
+            }
+        }
     }
-    // Passa rapidamente para nuvem de indices
-    for(size_t i=0; i<marcar_outliers->size(); i++){
-        if(marcar_outliers->points[i].x == 1)
-            outliers->indices.push_back(i);
-    }
-    // Extrair pontos da nuvem
-    ROS_INFO("Serao extraidos %zu pontos da nuvem, %.2f por cento.", outliers->indices.size(), 100*float(outliers->indices.size())/float(cloud->size()));
-    extract.setInputCloud(cloud);
-    extract.setNegative(true);
-    extract.setIndices(outliers);
-    extract.filter(*cloud);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void ProcessCloud::filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, int kn, float thresh){
@@ -337,10 +287,11 @@ void ProcessCloud::filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, in
         // Separa nuvem com esses vizinhos
         PointCloud<PointTN>::Ptr temp (new PointCloud<PointTN>);
         temp->resize(indices_vizinhos.size());
-        for(size_t j=0; j<indices_vizinhos.size(); j++)
+        for(size_t j=0; j<indices_vizinhos.size(); j++){
             temp->points[j] = cloud->points[ indices_vizinhos[j] ];
+        }
         // Rotaciona a nuvem separada segundo o raio que sai do centro do laser (origem)
-        transformPointCloud(*temp, *temp, rotacao_radial);
+        transformPointCloudWithNormals(*temp, *temp, rotacao_radial);
         // Calcula centroide e covariancia da nuvem
         compute3DCentroid(*temp, centroide);
         computeCovarianceMatrix(*temp, centroide, covariancia);
@@ -483,7 +434,7 @@ void ProcessCloud::writeNVM(string nome, string nome_imagem, Eigen::VectorXf par
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 std::string ProcessCloud::escreve_linha_imagem(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q){
-    std::string linha = pasta+nome;
+    std::string linha = pasta+nome+".png";
     // Adicionar foco
     linha = linha + " " + std::to_string(foco);
     // Adicionar quaternion
@@ -498,21 +449,12 @@ std::string ProcessCloud::escreve_linha_imagem(float foco, std::string nome, Eig
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void ProcessCloud::compileFinalNVM(vector<string> linhas){
-    // Se ja existe o arquivo, deletar para sobreescrever
-    struct stat buffer;
-    string nome_nvm_final = pasta + "cameras.nvm";
-    if(!stat(nome_nvm_final.c_str(), &buffer)){
-        if(remove(nome_nvm_final.c_str()) == 0)
-            ROS_INFO("Deletamos NVM anterior.");
-        else
-            ROS_ERROR("NVM final anterior nao foi deletado.");
-    }
     // Anota num arquivo a partir do nome vindo
-    ofstream nvm(nome_nvm_final);
+    ofstream nvm(pasta+"cameras.nvm");
     if(nvm.is_open()){
 
         nvm << "NVM_V3\n\n";
-        nvm << std::to_string(linhas.size())+"\n"; // Quantas imagens
+        nvm << std::to_string(linhas.size())+"\n"; // Quantas imagens, sempre uma aqui
         for(int i=0; i < linhas.size(); i++)
             nvm << linhas[i]; // Imagem com detalhes de camera
 
@@ -520,22 +462,22 @@ void ProcessCloud::compileFinalNVM(vector<string> linhas){
     nvm.close(); // Fechar para nao ter erro
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointT>> vetor_nuvens_in, vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r){
+void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r){
     omp_set_dynamic(0);
     #pragma omp parallel for num_threads(vetor_nuvens.size())
     for(int i = 0; i < vetor_nuvens.size(); i++){
         // Nuvem atual
-        PointCloud<PointT>::Ptr nuvem (new PointCloud<PointT>());
-        *nuvem = vetor_nuvens_in[i];
+        PointCloud<PointTN>::Ptr nuvem (new PointCloud<PointTN>());
+        *nuvem = vetor_nuvens[i];
         // Se e muito grande deve filtrar por voxel porque senao e impossivel de passar o filtro
         if(nuvem->size() > 600000){
             ROS_INFO("Precisou reduzir a nuvem %d de com %zu pontos ...", i, nuvem->size());
-            float l = 0.08;
-            VoxelGrid<PointT> voxel;
+            float l = 0.005;
+            VoxelGrid<PointTN> voxel;
             voxel.setInputCloud(nuvem);
             voxel.setLeafSize(l, l, l);
-//            voxel.filter(*nuvem);
-            StatisticalOutlierRemoval<PointT> sor;
+            voxel.filter(*nuvem);
+            StatisticalOutlierRemoval<PointTN> sor;
             sor.setInputCloud(nuvem);
             sor.setMeanK(10);
             sor.setStddevMulThresh(3);
@@ -543,19 +485,27 @@ void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointT>> vetor_nuvens
         }
         if(nuvem->size() < 400000){ // Senao demora muito para passar o polinomio
             pcl::search::KdTree<PointT>::Ptr tree_xyzrgb (new pcl::search::KdTree<PointT>());
+            // Separando nuvem em nuvem de pontos XYZ, nuvem XYZRGB e so as normais
+            PointCloud<PointT>::Ptr cloudxyzrgb (new PointCloud<PointT>());
+            cloudxyzrgb->resize(nuvem->size());
+            ROS_INFO("Separando nuvem %d para processar ...", i+1);
+            #pragma omp parallel for
+            for(size_t i=0; i < nuvem->size(); i++){
+                PointT t;
+                t.x = nuvem->points[i].x; t.y = nuvem->points[i].y; t.z = nuvem->points[i].z;
+                t.r = nuvem->points[i].r; t.g = nuvem->points[i].g; t.b = nuvem->points[i].b;
+                cloudxyzrgb->points[i] = t;
+            }
             // Passar filtro polinomial
             ROS_INFO("Aplicando filtro polinomial na nuvem %d com %zu pontos ...", i+1, nuvem->size());
             PointCloud<PointTN>::Ptr saida_poli (new PointCloud<PointTN>());
             MovingLeastSquares<PointT, PointTN> mls;
             mls.setComputeNormals(true);
-            mls.setInputCloud(nuvem);
+            mls.setInputCloud(cloudxyzrgb);
             mls.setPolynomialOrder(grau);
             mls.setSearchMethod(tree_xyzrgb);
             mls.setSearchRadius(r);
-//            mls.process(*saida_poli);
-            PointCloud<Normal>::Ptr normals_poli (new PointCloud<Normal>);
-            normals_poli->resize(nuvem->size());
-            concatenateFields(*nuvem, *normals_poli, *saida_poli);
+            mls.process(*saida_poli);
             this->calculateNormals(saida_poli);
             vetor_nuvens[i] = *saida_poli;
             ROS_INFO("Nuvem %d filtrada.", i+1);
