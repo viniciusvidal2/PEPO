@@ -82,7 +82,7 @@ public:
   void transformToCameraFrame(PointCloud<PointTN>::Ptr nuvem);
   void transformToCameraFrame(PointCloud<PointT>::Ptr nuvem);
   void transformCloudServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, nav_msgs::Odometry &msg, Eigen::Matrix4f &T, Eigen::Vector3f &C);
-  void createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, std::string nome, int w, int h);
+  void createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, std::string nome);
   void saveCloud(PointCloud<PointTN>::Ptr nuvem, string nome);
   void saveCloud(PointCloud<PointT>::Ptr nuvem, string nome);
   void saveImage(cv::Mat img, std::string nome);
@@ -91,7 +91,7 @@ public:
   Mat projectCloudToLaserCenter(PointCloud<PointTN>::Ptr cloud, float fx, float fy, float tx, float ty, Size s);
   void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, PointCloud<PointTN>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty);
   void colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, PointCloud<PointT>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty);
-  void applyPolynomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r);
+  void applyPolinomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r);
 
   void writeNVM(std::string nome, std::string nome_imagem, Eigen::VectorXf params);
   void compileFinalNVM(vector<std::string> linhas);

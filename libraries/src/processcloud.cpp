@@ -4,10 +4,10 @@
 ProcessCloud::ProcessCloud()
 {
     // Dimensoes da camera USB de entrada
-    cam_w = 3840; cam_h = 2160;
+    cam_w = 1024; cam_h = 768;
     // Inicia matriz intrinseca da camera USB
-    K_cam << 2182.371971,    0.000000, float(cam_w)/2,//432.741036,
-                0.000000, 2163.572540, float(cam_h)/2,//412.362072,
+    K_cam << 1484.701399,    0.000000, float(cam_w)/2,//432.741036,
+                0.000000, 1477.059238, float(cam_h)/2,//412.362072,
                 0.000000,    0.000000,   1.000000;
     // Inicia nome da pasta -> criar pasta no Dados_B9 no DESKTOP!
     char* home;
@@ -128,9 +128,9 @@ void ProcessCloud::transformToCameraFrame(PointCloud<PointT>::Ptr nuvem){
     transformPointCloud(*nuvem, *nuvem, T);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, string nome, int w, int h){
+void ProcessCloud::createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, string nome){
     // Projetar os pontos na foto virtual e colorir imagem
-    Mat fl(Size(w, h), CV_8UC3, Scalar(0, 0, 0)); // Mesmas dimensoes que a camera tiver
+    Mat fl(Size(cam_w, cam_h), CV_8UC3, Scalar(0, 0, 0)); // Mesmas dimensoes que a camera tiver
     #pragma omp parallel for
     for(size_t i = 0; i < nuvem->size(); i++){
         /// Pegar ponto em coordenadas normais
@@ -462,7 +462,7 @@ void ProcessCloud::compileFinalNVM(vector<string> linhas){
     nvm.close(); // Fechar para nao ter erro
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r){
+void ProcessCloud::applyPolinomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r){
     omp_set_dynamic(0);
     #pragma omp parallel for num_threads(vetor_nuvens.size())
     for(int i = 0; i < vetor_nuvens.size(); i++){
@@ -470,7 +470,7 @@ void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointTN>> &vetor_nuve
         PointCloud<PointTN>::Ptr nuvem (new PointCloud<PointTN>());
         *nuvem = vetor_nuvens[i];
         // Se e muito grande deve filtrar por voxel porque senao e impossivel de passar o filtro
-        if(nuvem->size() > 600000){
+        if(nuvem->size() > 1000000){
             ROS_INFO("Precisou reduzir a nuvem %d de com %zu pontos ...", i, nuvem->size());
             float l = 0.005;
             VoxelGrid<PointTN> voxel;
@@ -483,33 +483,31 @@ void ProcessCloud::applyPolynomialFilter(vector<PointCloud<PointTN>> &vetor_nuve
             sor.setStddevMulThresh(3);
             sor.filter(*nuvem);
         }
-        if(nuvem->size() < 400000){ // Senao demora muito para passar o polinomio
-            pcl::search::KdTree<PointT>::Ptr tree_xyzrgb (new pcl::search::KdTree<PointT>());
-            // Separando nuvem em nuvem de pontos XYZ, nuvem XYZRGB e so as normais
-            PointCloud<PointT>::Ptr cloudxyzrgb (new PointCloud<PointT>());
-            cloudxyzrgb->resize(nuvem->size());
-            ROS_INFO("Separando nuvem %d para processar ...", i+1);
-            #pragma omp parallel for
-            for(size_t i=0; i < nuvem->size(); i++){
-                PointT t;
-                t.x = nuvem->points[i].x; t.y = nuvem->points[i].y; t.z = nuvem->points[i].z;
-                t.r = nuvem->points[i].r; t.g = nuvem->points[i].g; t.b = nuvem->points[i].b;
-                cloudxyzrgb->points[i] = t;
-            }
-            // Passar filtro polinomial
-            ROS_INFO("Aplicando filtro polinomial na nuvem %d com %zu pontos ...", i+1, nuvem->size());
-            PointCloud<PointTN>::Ptr saida_poli (new PointCloud<PointTN>());
-            MovingLeastSquares<PointT, PointTN> mls;
-            mls.setComputeNormals(true);
-            mls.setInputCloud(cloudxyzrgb);
-            mls.setPolynomialOrder(grau);
-            mls.setSearchMethod(tree_xyzrgb);
-            mls.setSearchRadius(r);
-            mls.process(*saida_poli);
-            this->calculateNormals(saida_poli);
-            vetor_nuvens[i] = *saida_poli;
-            ROS_INFO("Nuvem %d filtrada.", i+1);
+        pcl::search::KdTree<PointT>::Ptr tree_xyzrgb (new pcl::search::KdTree<PointT>());
+        // Separando nuvem em nuvem de pontos XYZ, nuvem XYZRGB e so as normais
+        PointCloud<PointT>::Ptr cloudxyzrgb (new PointCloud<PointT>());
+        cloudxyzrgb->resize(nuvem->size());
+        ROS_INFO("Separando nuvem %d para processar ...", i+1);
+        #pragma omp parallel for
+        for(size_t i=0; i < nuvem->size(); i++){
+            PointT t;
+            t.x = nuvem->points[i].x; t.y = nuvem->points[i].y; t.z = nuvem->points[i].z;
+            t.r = nuvem->points[i].r; t.g = nuvem->points[i].g; t.b = nuvem->points[i].b;
+            cloudxyzrgb->points[i] = t;
         }
+        // Passar filtro polinomial
+        ROS_INFO("Aplicando filtro polinomial na nuvem %d com %zu pontos ...", i+1, nuvem->size());
+        PointCloud<PointTN>::Ptr saida_poli (new PointCloud<PointTN>());
+        MovingLeastSquares<PointT, PointTN> mls;
+        mls.setComputeNormals(true);
+        mls.setInputCloud(cloudxyzrgb);
+        mls.setPolynomialOrder(grau);
+        mls.setSearchMethod(tree_xyzrgb);
+        mls.setSearchRadius(r);
+        mls.process(*saida_poli);
+        this->calculateNormals(saida_poli);
+        vetor_nuvens[i] = *saida_poli;
+        ROS_INFO("Nuvem %d filtrada.", i+1);
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
