@@ -20,8 +20,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include "opencv2/videoio.hpp"
-#include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d.hpp>
 #include <opencv2/calib3d.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
@@ -34,14 +32,11 @@
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/normal_3d.h>
 #include <pcl/filters/conditional_removal.h>
-#include <pcl/filters/passthrough.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/surface/mls.h>
-#include <pcl/segmentation/extract_clusters.h>
-#include <pcl/segmentation/conditional_euclidean_clustering.h>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -70,7 +65,6 @@ using namespace std;
 using namespace pcl;
 using namespace pcl::io;
 using namespace cv;
-using namespace Eigen;
 
 typedef PointXYZRGB       PointT ;
 typedef PointXYZRGBNormal PointTN;
@@ -78,45 +72,42 @@ typedef PointXYZRGBNormal PointTN;
 class ProcessCloud
 {
 public:
-  ProcessCloud(string p);
+  ProcessCloud(string _pasta);
   virtual ~ProcessCloud();
   void calculateNormals(PointCloud<PointT>::Ptr in, PointCloud<PointTN>::Ptr acc_normal);
   void calculateNormals(PointCloud<PointTN>::Ptr acc_normal);
+  void colorCloudThroughDistance(PointCloud<PointTN>::Ptr nuvem);
   void transformToCameraFrame(PointCloud<PointTN>::Ptr nuvem);
   void transformToCameraFrame(PointCloud<PointT>::Ptr nuvem);
   void transformCloudServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, nav_msgs::Odometry &msg, Eigen::Matrix4f &T, Eigen::Vector3f &C);
+  void createVirtualLaserImage(PointCloud<PointTN>::Ptr nuvem, std::string nome);
   void saveCloud(PointCloud<PointTN>::Ptr nuvem, string nome);
   void saveCloud(PointCloud<PointT>::Ptr nuvem, string nome);
   void saveImage(cv::Mat img, std::string nome);
-  void filterCloudDepthCovariance(PointCloud<PointT >::Ptr cloud, int kn, float thresh);
   void filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, int kn, float thresh);
-  void preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::Ptr out, float vs, float d, int fp);
-  void transformCloudAndCamServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, Vector3f &C, Quaternion<float> &q);
 
-  void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, Mat image, float scale);
-  void colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, Mat image, float scale);
+  Mat projectCloudToLaserCenter(PointCloud<PointTN>::Ptr cloud, float fx, float fy, float tx, float ty, Size s);
+  void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, PointCloud<PointTN>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty);
+  void colorCloudWithCalibratedImage(PointCloud<PointT>::Ptr cloud_in, PointCloud<PointT>::Ptr cloud_out, Mat image, float fx, float fy, float tx, float ty);
+  void applyPolinomialFilter(vector<PointCloud<PointTN>> &vetor_nuvens, int grau, double r);
 
-  void compileFinalNVM(vector<string> linhas);
-  void compileFinalSFM(vector<string> linhas);
-  string escreve_linha_nvm(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q);
-  string escreve_linha_sfm(string nome, Matrix3f r, Vector3f t);
-
-  Eigen::Matrix3f euler2matrix(float r, float p, float y);
-
-  MatrixXf getRtcam();
-  Vector3f gettCam();
+  void writeNVM(std::string nome, std::string nome_imagem, Eigen::VectorXf params);
+  void compileFinalNVM(vector<std::string> linhas);
+  std::string escreve_linha_imagem(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q);
+  string getFolderName();
+  void setFolderName(string name);
 
 private:
-
-  void divideInOctreeLevels(PointCloud<PointT>::Ptr cloud, vector<PointCloud<PointT>> &leafs, float level);
-  void removeNotProjectedThroughDefinedColor(PointCloud<PointT>::Ptr cloud, int r, int g, int b);
+  /// Metodos
+  float normaldist(float x, float media, float dev);
+  Eigen::Matrix3f euler2matrix(float r, float p, float y);
+  Mat correctColorCluster(Mat in);
+  Vec3b findPredominantColor(int u, int v, Mat in, int desvio);
 
   /// Variaveis
-  Matrix3f K1;
-  MatrixXf Rt1;
-  Matrix3f K4;
-  MatrixXf Rt4;
-  string pasta;     // Nome da pasta a salvar as coisas
+  Eigen::Matrix3f K_cam; // Parametros intrinsecos da camera
+  int cam_w, cam_h;      // Dimensoes da camera
+  std::string pasta;     // Nome da pasta a salvar as coisas
 
 };
 
