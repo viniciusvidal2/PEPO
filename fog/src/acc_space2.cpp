@@ -128,28 +128,40 @@ void saveTimeFiles(){
 
     // Escreve uma linha para cada valor
     if(t_msg.is_open()){
-        for(auto t:tempos_transito_msg)
+        for(auto t:tempos_transito_msg){
             t_msg << t;
+            t_msg << "\n";
+        }
     }
     if(t_cor.is_open()){
-        for(auto t:tempos_filtra_cor)
+        for(auto t:tempos_filtra_cor){
             t_cor << t;
+            t_cor << "\n";
+        }
     }
     if(t_octree.is_open()){
-        for(auto t:tempos_octree)
+        for(auto t:tempos_octree){
             t_octree << t;
+            t_octree << "\n";
+        }
     }
     if(t_df.is_open()){
-        for(auto t:tempos_demaisfiltros)
+        for(auto t:tempos_demaisfiltros){
             t_df << t;
+            t_df << "\n";
+        }
     }
     if(t_normais.is_open()){
-        for(auto t:tempos_normais)
+        for(auto t:tempos_normais){
             t_normais << t;
+            t_normais << "\n";
+        }
     }
     if(t_vlv.is_open()){
-        for(auto t:tempos_vizinhos_lastview)
+        for(auto t:tempos_vizinhos_lastview){
             t_vlv << t;
+            t_vlv << "\n";
+        }
     }
 
     // Fecha arquivos
