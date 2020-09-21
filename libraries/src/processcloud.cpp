@@ -313,7 +313,8 @@ void ProcessCloud::filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, in
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::Ptr out, float vs, float d, int fp,
-                              float &tempo_cor, float &tempo_octree, float &tempo_demaisfiltros, float &tempo_normais){
+                              float &tempo_cor, float &tempo_octree, float &tempo_demaisfiltros, float &tempo_normais,
+                              size_t &pontos_demaisfiltros_avg, size_t &pontos_covariancia_avg){
     // Retirando pontos que vem do edge nao projetados ou com erro
     ros::Time tempo = ros::Time::now();
     this->removeNotProjectedThroughDefinedColor(cin, 200, 200, 200);
@@ -334,85 +335,129 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
     pass.filter(*cin);
     tempo_cor = (ros::Time::now() - tempo).toSec();
     tempo = ros::Time::now();
-    // Separando a nuvem de entrada em clusters
-    vector<PointCloud<PointT>> cin_clusters;
-    this->divideInOctreeLevels(cin, cin_clusters, 2);
-    // Continuar separando enquanto houver algum maior que 30 mil pontos
-    bool so_pequenos = false;
-    size_t indice_grande;
-    PointCloud<PointT>::Ptr nuvem_grande (new PointCloud<PointT>);
-    vector<PointCloud<PointT>> big_clusters;
-    while(!so_pequenos){
-        so_pequenos = true;
-        // Se achar algum cluster grande ainda, separar indice e nuvem correspondente
-        for(size_t i=0; i<cin_clusters.size(); i++){
-            if(cin_clusters[i].size() > 20000){
-                so_pequenos = false;
-                indice_grande = i;
-                *nuvem_grande = cin_clusters[i];
-                break;
-            }
-            // Matar cluster pequeno
-            if(cin_clusters[i].size() < 200) cin_clusters[i].clear();
-        }
-        // Se foi achado algum cluster grande, processar ele, substituir o original com o primeiro cluster obtido e adicionar
-        // o restante dos clusters ao final da nuvem de clusters
-        if(!so_pequenos && nuvem_grande->size() > 0){
-            this->divideInOctreeLevels(nuvem_grande, big_clusters, 2);
-            cin_clusters[indice_grande] = big_clusters[0];
-            cin_clusters.insert(cin_clusters.end(), big_clusters.begin()+1, big_clusters.end());
-            big_clusters.clear(); nuvem_grande->clear();
-        }
-    }
-    tempo_octree = (ros::Time::now() - tempo).toSec();
-    // Para cada cluster, filtrar e retornar no vetor de filtradas
-    vector<PointCloud<PointTN>> out_clusters(cin_clusters.size());
-    vector<float> tempos_demaisfiltros(cin_clusters.size()), tempos_normais(cin_clusters.size());
-#pragma omp parallel for
-    for(size_t i=0; i<out_clusters.size(); i++){
-        ros::Time tempo2 = ros::Time::now();
-        PointCloud<PointT>::Ptr temp (new PointCloud<PointT>);
-        *temp = cin_clusters[i];
+
+    bool com_octree = false;
+    /////////////////////////////////////////////////////////////
+    /// Parte sem octree - ver como o tempo varia
+    ///
+    if(!com_octree){
+        tempo_octree = 0;
         // Filtro de ruidos aleatorios
         StatisticalOutlierRemoval<PointT> sor;
         sor.setMeanK(30);
         sor.setStddevMulThresh(2);
         sor.setNegative(false);
-        sor.setInputCloud(temp);
-        sor.filter(*temp);
+        sor.setInputCloud(cin);
+        sor.filter(*cin);
+        pontos_demaisfiltros_avg = cin->size();
         // Calcular filtro de covariancia na regiao mais proxima
         float depth_cov_filter = 5;
-        this->filterCloudDepthCovariance(temp, 100, 2.0, depth_cov_filter);
-        tempos_demaisfiltros[i] = (ros::Time::now() - tempo2).toSec();
-        tempo2 = ros::Time::now();
+        this->filterCloudDepthCovariance(cin, 100, 1.5, depth_cov_filter);
+        pontos_covariancia_avg = cin->size();
+        tempo_demaisfiltros = (ros::Time::now() - tempo).toSec();
+        tempo = ros::Time::now();
         // Polinomio
         PointCloud<PointTN>::Ptr filt_normal (new PointCloud<PointTN>);
-        if(fp == 1){
-            // Passando polinomio pra suavizar a parada
-            search::KdTree<PointT>::Ptr tree (new search::KdTree<PointT>);
-            MovingLeastSquares<PointT, PointTN> mls;
-            mls.setComputeNormals(true);
-            mls.setInputCloud(temp);
-            mls.setPolynomialOrder(1);
-            mls.setSearchMethod(tree);
-            mls.setSearchRadius(0.05);
-            mls.process(*filt_normal);
-        } else {
-            PointCloud<Normal>::Ptr normals (new PointCloud<Normal>);
-            normals->resize(temp->size());
-            concatenateFields(*temp, *normals, *filt_normal);
-        }
-        // Normais apos tudo filtrado
-        this->calculateNormals(filt_normal);        
-        out_clusters[i] = *filt_normal;
-        tempos_normais[i] = (ros::Time::now() - tempo2).toSec();
-    }
-    // Somar todos os clusters filtrados de volta na nuvem de saida
-    for(size_t i=0; i<out_clusters.size(); i++)
-        *out += out_clusters[i];
+        PointCloud<Normal>::Ptr normals (new PointCloud<Normal>);
+        normals->resize(cin->size());
+        concatenateFields(*cin, *normals, *filt_normal);
 
-    tempo_demaisfiltros = *max_element(tempos_demaisfiltros.begin(), tempos_demaisfiltros.end());
-    tempo_normais = *max_element(tempos_normais.begin(), tempos_normais.end());
+        // Normais apos tudo filtrado
+        this->calculateNormals(filt_normal);
+        tempo_normais = (ros::Time::now() - tempo).toSec();
+        *out = *filt_normal;
+
+    } else {
+        /////////////////////////////////////////////////////////////
+        /// Parte com octree - funcionando oficial
+        ///
+
+        // Separando a nuvem de entrada em clusters
+        vector<PointCloud<PointT>> cin_clusters;
+        this->divideInOctreeLevels(cin, cin_clusters, 2);
+        // Continuar separando enquanto houver algum maior que 30 mil pontos
+        bool so_pequenos = false;
+        size_t indice_grande;
+        PointCloud<PointT>::Ptr nuvem_grande (new PointCloud<PointT>);
+        vector<PointCloud<PointT>> big_clusters;
+        while(!so_pequenos){
+            so_pequenos = true;
+            // Se achar algum cluster grande ainda, separar indice e nuvem correspondente
+            for(size_t i=0; i<cin_clusters.size(); i++){
+                if(cin_clusters[i].size() > 20000){
+                    so_pequenos = false;
+                    indice_grande = i;
+                    *nuvem_grande = cin_clusters[i];
+                    break;
+                }
+                // Matar cluster pequeno
+                if(cin_clusters[i].size() < 200) cin_clusters[i].clear();
+            }
+            // Se foi achado algum cluster grande, processar ele, substituir o original com o primeiro cluster obtido e adicionar
+            // o restante dos clusters ao final da nuvem de clusters
+            if(!so_pequenos && nuvem_grande->size() > 0){
+                this->divideInOctreeLevels(nuvem_grande, big_clusters, 2);
+                cin_clusters[indice_grande] = big_clusters[0];
+                cin_clusters.insert(cin_clusters.end(), big_clusters.begin()+1, big_clusters.end());
+                big_clusters.clear(); nuvem_grande->clear();
+            }
+        }
+        tempo_octree = (ros::Time::now() - tempo).toSec();
+        // Para cada cluster, filtrar e retornar no vetor de filtradas
+        vector<PointCloud<PointTN>> out_clusters(cin_clusters.size());
+        vector<float > tempos_demaisfiltros(cin_clusters.size()), tempos_normais(cin_clusters.size());
+        vector<size_t> pontos_demaisfiltros(cin_clusters.size()), pontos_covariancia(cin_clusters.size());
+#pragma omp parallel for
+        for(size_t i=0; i<out_clusters.size(); i++){
+            ros::Time tempo2 = ros::Time::now();
+            PointCloud<PointT>::Ptr temp (new PointCloud<PointT>);
+            *temp = cin_clusters[i];
+            // Filtro de ruidos aleatorios
+            StatisticalOutlierRemoval<PointT> sor;
+            sor.setMeanK(30);
+            sor.setStddevMulThresh(2);
+            sor.setNegative(false);
+            sor.setInputCloud(temp);
+            sor.filter(*temp);
+            pontos_demaisfiltros[i] = temp->size();
+            // Calcular filtro de covariancia na regiao mais proxima
+            float depth_cov_filter = 5;
+            this->filterCloudDepthCovariance(temp, 100, 1.5, depth_cov_filter);
+            pontos_covariancia[i] = temp->size();
+            tempos_demaisfiltros[i] = (ros::Time::now() - tempo2).toSec();
+            tempo2 = ros::Time::now();
+            // Polinomio
+            PointCloud<PointTN>::Ptr filt_normal (new PointCloud<PointTN>);
+            if(fp == 1){
+                // Passando polinomio pra suavizar a parada
+                search::KdTree<PointT>::Ptr tree (new search::KdTree<PointT>);
+                MovingLeastSquares<PointT, PointTN> mls;
+                mls.setComputeNormals(true);
+                mls.setInputCloud(temp);
+                mls.setPolynomialOrder(1);
+                mls.setSearchMethod(tree);
+                mls.setSearchRadius(0.05);
+                mls.process(*filt_normal);
+            } else {
+                PointCloud<Normal>::Ptr normals (new PointCloud<Normal>);
+                normals->resize(temp->size());
+                concatenateFields(*temp, *normals, *filt_normal);
+            }
+            // Normais apos tudo filtrado
+            this->calculateNormals(filt_normal);
+            out_clusters[i] = *filt_normal;
+            tempos_normais[i] = (ros::Time::now() - tempo2).toSec();
+        }
+        // Somar todos os clusters filtrados de volta na nuvem de saida
+        for(size_t i=0; i<out_clusters.size(); i++)
+            *out += out_clusters[i];
+
+        tempo_demaisfiltros = *max_element(tempos_demaisfiltros.begin(), tempos_demaisfiltros.end());
+        tempo_normais = *max_element(tempos_normais.begin(), tempos_normais.end());
+        pontos_demaisfiltros_avg = accumulate(pontos_demaisfiltros.begin(), pontos_demaisfiltros.end(), 0);
+        pontos_covariancia_avg   = accumulate(pontos_covariancia.begin()  , pontos_covariancia.end()  , 0);
+        /////////////////////////////////////////////////////////////
+    }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void ProcessCloud::divideInOctreeLevels(PointCloud<PointT>::Ptr cloud, vector<PointCloud<PointT>> &leafs, float level){

@@ -90,7 +90,7 @@ public:
   void saveImage(cv::Mat img, std::string nome);
   void filterCloudDepthCovariance(PointCloud<PointT >::Ptr cloud, int kn, float thresh, float depth);
   void filterCloudDepthCovariance(PointCloud<PointTN>::Ptr cloud, int kn, float thresh, float depth);
-  void preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::Ptr out, float vs, float d, int fp, float &tempo_cor, float &tempo_octree, float &tempo_demaisfiltros, float &tempo_normais);
+  void preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::Ptr out, float vs, float d, int fp, float &tempo_cor, float &tempo_octree, float &tempo_demaisfiltros, float &tempo_normais, size_t &pontos_demaisfiltros_avg, size_t &pontos_covariancia_avg);
   void transformCloudAndCamServoAngles(PointCloud<PointT>::Ptr cloud, float pan, float tilt, Vector3f &C, Quaternion<float> &q);
 
   void colorCloudWithCalibratedImage(PointCloud<PointTN>::Ptr cloud_in, Mat image, float scale);

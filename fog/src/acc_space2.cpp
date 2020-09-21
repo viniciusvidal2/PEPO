@@ -5,25 +5,6 @@
 #include <string>
 #include <math.h>
 
-#include <sensor_msgs/PointCloud2.h>
-#include <sensor_msgs/Image.h>
-#include <nav_msgs/Odometry.h>
-
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <pcl/io/ply_io.h>
-#include <pcl/filters/voxel_grid.h>
-#include <pcl/filters/extract_indices.h>
-#include <pcl/filters/passthrough.h>
-#include <pcl_ros/transforms.h>
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/octree/octree.h>
-
-#include <cv_bridge/cv_bridge.h>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
-
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 #include <message_filters/sync_policies/approximate_time.h>
@@ -80,10 +61,11 @@ int ntilts = 4, contador_nuvens = 0;
 float voxel_size, depth;
 int filter_poli;
 // Braco do centro ao laser
-Vector3f off_laser{0, 0, 0.056};
+Vector3f off_laser{0, 0, 0.04};
 
 // Vetores para resultados de tempo
-vector<float> tempos_transito_msg, tempos_filtra_cor, tempos_octree, tempos_demaisfiltros, tempos_normais, tempos_vizinhos_lastview;
+vector<float > tempos_transito_msg, tempos_filtra_cor, tempos_octree, tempos_demaisfiltros, tempos_normais, tempos_vizinhos_lastview;
+vector<size_t> pontos_demaisfiltros, pontos_covariancia, pontos_kdtree;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 int deg2raw(float deg, string motor){
@@ -165,6 +147,36 @@ void saveTimeFiles(){
     t_df.close(); t_normais.close(); t_vlv.close();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
+void savePointFiles(){
+    // Abre os arquivos todos
+    ofstream p_df(pasta+"pontos_demaisfiltros.txt");
+    ofstream p_cov(pasta+"pontos_covariancia.txt");
+    ofstream p_kdt(pasta+"pontos_vizinhos_kdtree.txt");
+
+    // Escreve uma linha para cada valor
+    if(p_df.is_open()){
+        for(auto p:pontos_demaisfiltros){
+            p_df << p;
+            p_df << "\n";
+        }
+    }
+    if(p_cov.is_open()){
+        for(auto p:pontos_covariancia){
+            p_cov << p;
+            p_cov << "\n";
+        }
+    }
+    if(p_kdt.is_open()){
+        for(auto p:pontos_kdtree){
+            p_kdt << p;
+            p_kdt << "\n";
+        }
+    }
+
+    // Fecha arquivos
+    p_df.close(); p_cov.close(); p_kdt.close();
+}
+///////////////////////////////////////////////////////////////////////////////////////////
 
 /// Callback das poses
 ///
@@ -199,24 +211,30 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
     // Realizar pre-processamento
     PointCloud<PointTN>::Ptr cloud_normals (new PointCloud<PointTN>);
     float tempo_cor, tempo_octree, tempo_demaisfiltros, tempo_normais;
-    pc->preprocess(cloud, cloud_normals, voxel_size/100.0f, depth, filter_poli, tempo_cor, tempo_octree, tempo_demaisfiltros, tempo_normais);
+    size_t p_df, p_cov;
+    pc->preprocess(cloud, cloud_normals, voxel_size/100.0f, depth, filter_poli,
+                   tempo_cor, tempo_octree, tempo_demaisfiltros, tempo_normais,
+                   p_df, p_cov);
     tempos_filtra_cor.push_back(tempo_cor);
     tempos_octree.push_back(tempo_octree);
     tempos_demaisfiltros.push_back(tempo_demaisfiltros);
     tempos_normais.push_back(tempo_normais);
+    pontos_demaisfiltros.push_back(p_df);
+    pontos_covariancia.push_back(p_cov);
+
     cloud->clear();
 
     // Adiciona somente uma parcial daquela vista em pan
     *parcial += *cloud_normals;
 
     ////////// Salva as coisas temporarias para o juliano
-    saveTempJuliano(cloud_normals, cont_aquisicao, pan, tilt);
+//    saveTempJuliano(cloud_normals, cont_aquisicao, pan, tilt);
 
     if(contador_nuvens == ntilts){
 
         tempo = ros::Time::now();
         // Transformacao inicial, antes de sofrer otimizacao, devido aos angulos de servo em PAN
-        Matrix3f R = pc->euler2matrix(0, 0, -DEG2RAD(raw2deg(pan, "pan") - 0*int(cont_aquisicao/ntilts)));
+        Matrix3f R = pc->euler2matrix(0, 0, -DEG2RAD(raw2deg(pan, "pan")));
         Matrix4f Tini = Matrix4f::Identity();
         Isometry3f iso_pan = Isometry3f::Identity();
         iso_pan.translate(off_laser);
@@ -251,7 +269,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
                 roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 130.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
             else // Se for, comparar com a acumulada pra nao repetir pontos do inicio tambem
                 roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos,  30.0);
-            size_t tamanho_acc = parcial_pontos_novos->size();
+
+            pontos_kdtree.push_back(parcial_pontos_novos->size());
+
             // Acumulando pontos novos
             *acc += *parcial_pontos_novos;
             ROS_WARN("Nuvem acumulada com %zu pontos.", acc->size());
@@ -333,8 +353,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
         Mat blueprint;
         float side_area = 20, side_res = 0.04;
         pc->blueprint(acc, side_area, side_res, blueprint);
-        // Salva em arquivos os vetores de tempo para serem observados no futuro
+        // Salva em arquivos os vetores de tempo e pontos para serem observados no futuro
         saveTimeFiles();
+        savePointFiles();
         ROS_INFO("Processo finalizado.");
         ros::shutdown();
     }
@@ -370,7 +391,7 @@ int main(int argc, char **argv)
     roo = new RegisterObjectOptm();
 
     // Calculando taxas exatas entre deg e raw para os motores de pan e tilt
-    deg_raw_pan  = 0.08789062;
+    deg_raw_pan  = 0.08764648;
     deg_raw_tilt = deg_raw_pan; //(deg_max_tilt - deg_min_tilt)/(raw_max_tilt - raw_min_tilt);
     raw_deg_pan  = 1.0/deg_raw_pan ;
     raw_deg_tilt = 1.0/deg_raw_tilt;
