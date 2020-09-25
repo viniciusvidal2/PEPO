@@ -141,16 +141,15 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 #pragma omp parallel for
 			for (int i = valH.first->x; i < valH.first->x + size1 / 3; i++)
 			{
-				for (int j = 0; j < img.rows; j++)
+				for (int j = valH.first->y; j < valH.second->y; j++)
 				{
-					//if (img.at< Vec3b>(Point(i, j))[0] != 0 && img.at< Vec3b>(Point(i, j))[1] != 0 && img.at< Vec3b>(Point(i, j))[2] != 0) {
 					Vec3b color1(0, 0, 0);
 					img.at< Vec3b>(Point(i, j)) = color1;
-					//}
+
 				}
 			}
 #pragma omp parallel for
-			for (int i = valH.second->x - size1 / 3; i < valH.second->x; i++)
+			for (int i = valH.first->x - size1 / 3; i < valH.second->x; i++)
 			{
 				for (int j = 0; j < img.rows; j++)
 				{
@@ -430,15 +429,15 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 	//Encontrando a máscara
 
 	Mat mask_out = createMask(out, contours3, k);
-	   
+
 	cv::subtract(dst, mask_out, dst);
 	dst.convertTo(dst, CV_32FC3, 1.0 / 255.0);
 	mask[0] = dst;
-	
+
 
 	//Filtro Gaussiano e o resultado é uma imagem reduzida com a metade do tamanho de cada dimensão
 
-		for (int i = 1; i < level_num; ++i)
+	for (int i = 1; i < level_num; ++i)
 	{
 		int wp = a_pyramid[i - 1].rows / 2;
 		int hp = a_pyramid[i - 1].cols / 2;
@@ -481,10 +480,10 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 		int hp = a_pyramid[i].rows;
 
 		Mat dst_a, dst_b, new_a, new_b;
-		
+
 		resize(a_pyramid[i + 1], dst_a, cv::Size(wp, hp));
 		resize(b_pyramid[i + 1], dst_b, cv::Size(wp, hp));
-				
+
 		subtract(a_pyramid[i], dst_a, a_pyramid[i]);
 		subtract(b_pyramid[i], dst_b, b_pyramid[i]);
 
@@ -525,6 +524,15 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 Matrix4f calculateCameraPose(Quaternion<float> q, Vector3f &C, int i) {
 	Matrix3f r = q.matrix();
+	Vector3f t = C;
+
+	Matrix4f T = Matrix4f::Identity();
+	T.block<3, 3>(0, 0) = r.transpose(); T.block<3, 1>(0, 3) = t;
+
+	return T;
+}
+Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &C, int i) {
+	Matrix3f r = rot;
 	Vector3f t = C;
 
 	Matrix4f T = Matrix4f::Identity();
@@ -573,28 +581,48 @@ int main(int argc, char **argv) {
 	char* home;
 	home = getenv("HOME");
 	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada1/";
-	std::string arquivo_nvm = pasta + "cameras.nvm";
+	std::string arquivo_nvm = pasta + "cameras.sfm";
 
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
 	vector<Quaternion<float>> rots;
 	vector<Vector3f> Cs;
+	vector<Matrix3f> rot;
 	vector<std::string> nomes_imagens, linhas, linhas_organizadas;
 	std::string linha;
+	int flag = 0;
 	printf("Abrindo e lendo arquivo NVM ...\n");
-	if (nvm.is_open()) {
-		while (getline(nvm, linha)) {
-			if (contador_linhas > 3 && linha.size() > 4)
-				linhas.push_back(linha);
+	if (arquivo_nvm.substr(arquivo_nvm.find_last_of(".") + 1) == "sfm")
+	{
+		flag = 1;
+		if (nvm.is_open()) {
+			while (getline(nvm, linha)) {
+				if (contador_linhas > 2 && linha.size() > 4)
+					linhas.push_back(linha);
 
-			contador_linhas++;
+				contador_linhas++;
+			}
+		}
+		else {
+			printf("Arquivo de cameras nao encontrado. Desligando ...\n");
+			return 0;
 		}
 	}
 	else {
-		printf("Arquivo de cameras nao encontrado. Desligando ...\n");
-		return 0;
-	}
 
+		if (nvm.is_open()) {
+			while (getline(nvm, linha)) {
+				if (contador_linhas > 3 && linha.size() > 4)
+					linhas.push_back(linha);
+
+				contador_linhas++;
+			}
+		}
+		else {
+			printf("Arquivo de cameras nao encontrado. Desligando ...\n");
+			return 0;
+		}
+	}
 	// Reorganizando nvm para facilitar para mim o blending -  Colocando em linhas
 	int i = 0;
 	int cont = 0;
@@ -610,6 +638,7 @@ int main(int argc, char **argv) {
 		cont++;
 	}
 
+
 	i = 1;
 	cont = 0;
 
@@ -623,6 +652,7 @@ int main(int argc, char **argv) {
 		cont++;
 
 	}
+
 	i = 2;
 	cont = 0;
 
@@ -654,24 +684,55 @@ int main(int argc, char **argv) {
 	linhas = linhas_organizadas;
 	int index = 0;
 	// Alocar nos respectivos vetores
-	rots.resize(linhas.size()); Cs.resize(linhas.size()), nomes_imagens.resize(linhas.size());
-	float foco;
+	Vector2f	center;
+	rots.resize(linhas.size()); Cs.resize(linhas.size()), nomes_imagens.resize(linhas.size()), rot.resize(linhas.size());// center.resize(linhas.size());
+	Vector2f foco;
+
 	// Para cada imagem, obter valores
-	for (int i = 0; i < linhas.size(); i++) {
-		istringstream iss(linhas[i]);
-		vector<string> splits(istream_iterator<string>{iss}, istream_iterator<string>());
-		// Nome
-		string nome_fim = splits[0].substr(splits[0].find_last_of('/') + 1, splits[0].size() - 1);
-		nomes_imagens[i] = pasta + nome_fim;
-		// Foco
-		foco = stof(splits[1]);//*(0.6667); // AH MARIA!
-// Quaternion
-		Quaternion<float> q;
-		q.w() = stof(splits[2]); q.x() = stof(splits[3]); q.y() = stof(splits[4]); q.z() = stof(splits[5]);
-		rots[i] = q;
-		// Centro
-		Vector3f C(stof(splits[6]), stof(splits[7]), stof(splits[8]));
-		Cs[i] = C;
+	if (arquivo_nvm.substr(arquivo_nvm.find_last_of(".") + 1) == "sfm")
+	{
+		for (int i = 0; i < linhas.size(); i++) {
+			istringstream iss(linhas[i]);
+			vector<string> splits(istream_iterator<string>{iss}, istream_iterator<string>());
+			// Nome
+			string nome_fim = splits[0].substr(splits[0].find_last_of('/') + 1, splits[0].size() - 1);
+			nomes_imagens[i] = pasta + nome_fim;
+
+			//rotation
+			Matrix3f r;
+			r << stof(splits[1]), stof(splits[2]), stof(splits[3]),
+				stof(splits[4]), stof(splits[5]), stof(splits[6]),
+				stof(splits[7]), stof(splits[8]), stof(splits[9]);
+			rot[i] = r;
+			//translação
+			Vector3f t(stof(splits[10]), stof(splits[11]), stof(splits[12]));
+
+			// Foco
+			foco << stof(splits[13]), stof(splits[14]);
+
+			// Centro
+			Vector2f C(stof(splits[15]), stof(splits[16]));
+			center << stof(splits[15]), stof(splits[16]);
+			Cs[i] = t;
+		}
+	}
+	else {
+		for (int i = 0; i < linhas.size(); i++) {
+			istringstream iss(linhas[i]);
+			vector<string> splits(istream_iterator<string>{iss}, istream_iterator<string>());
+			// Nome
+			string nome_fim = splits[0].substr(splits[0].find_last_of('/') + 1, splits[0].size() - 1);
+			nomes_imagens[i] = pasta + nome_fim;
+			// Foco
+			foco << stof(splits[1]), stof(splits[1]);//*(0.6667); // AH MARIA!
+			// Quaternion
+			Quaternion<float> q;
+			q.w() = stof(splits[2]); q.x() = stof(splits[3]); q.y() = stof(splits[4]); q.z() = stof(splits[5]);
+			rots[i] = q;
+			// Centro
+			Vector3f C(stof(splits[6]), stof(splits[7]), stof(splits[8]));
+			Cs[i] = C;
+		}
 	}
 	/// Ler todas as nuvens, somar e salvar
 	struct stat buffer;
@@ -695,8 +756,8 @@ int main(int argc, char **argv) {
 
 	int contador = 0;
 	Mat im360 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
-   // ros::Time tempo = ros::Time::now();
-	auto start = chrono::steady_clock::now();
+	//ros::Time tempo = ros::Time::now();
+	//auto start = chrono::steady_clock::now();
 	printf("Processando cada foto, sem print nenhum pra ir mais rapido ...\n");
 	for (int i = 0; i < nomes_imagens.size(); i++)
 	{
@@ -707,14 +768,21 @@ int main(int argc, char **argv) {
 			cout << ("Imagem nao foi encontrada, checar NVM ...");
 
 		// Calcular a vista da camera pelo Rt inverso - rotacionar para o nosso mundo, com Z para cima
-		Matrix4f T = calculateCameraPose(rots[i], Cs[i], i);
+		Matrix4f T;
+		if (flag == 1) {
+			T = calculateCameraPoseSFM(rot[i], Cs[i], i);
+		}
+		else {
+
+			T = calculateCameraPose(rots[i], Cs[i], i);
+		}
 		// Definir o foco em dimensoes fisicas do frustrum
 		float F = R;
 		Vector3f C = Cs[i];
 		double minX, minY, maxX, maxY;
-		maxX = F * (float(image.cols) / (2.0*foco));
+		maxX = F * (float(image.cols) / (2.0*foco[0]));
 		minX = -maxX;
-		maxY = F * (float(image.rows) / (2.0*foco));
+		maxY = F * (float(image.rows) / (2.0*foco[1]));
 		minY = -maxY;
 		// Calcular os 4 pontos do frustrum
 		/*
@@ -766,7 +834,7 @@ int main(int argc, char **argv) {
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
 			result2 = multiband_blending(anterior2, imagem_esferica[i], index);
 			anterior2 = result2;
-			
+
 		}
 		if (i == 24)
 		{
@@ -781,7 +849,7 @@ int main(int argc, char **argv) {
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
 			result3 = multiband_blending(anterior3, imagem_esferica[i], index);
 			anterior3 = result3;
-			
+
 
 		}
 		if (i == 36) {
@@ -809,12 +877,12 @@ int main(int argc, char **argv) {
 	result.convertTo(result, CV_8UC3, 255);
 	imwrite(pasta + "imagem_esferica_Blending.png", result);
 
-	auto end = chrono::steady_clock::now();
-	// Store the time difference between start and end
-	auto diff = end - start;
-	cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
-	// ROS_WARN("Tempo para processar: %.2f segundos.", (ros::Time::now() - tempo).toSec());
- // Salvando imagem esferica final
+	//auto end = chrono::steady_clock::now();
+	//// Store the time difference between start and end
+	//auto diff = end - start;
+	//cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
+	//ROS_WARN("Tempo para processar: %.2f segundos.", (ros::Time::now() - tempo).toSec());
+	// Salvando imagem esferica final
 	imwrite(pasta + "imagem_esferica_result.png", im360);
 	printf("Processo finalizado.");
 
