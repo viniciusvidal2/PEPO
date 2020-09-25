@@ -336,7 +336,7 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
     tempo_cor = (ros::Time::now() - tempo).toSec();
     tempo = ros::Time::now();
 
-    bool com_octree = false;
+    bool com_octree = true;
     /////////////////////////////////////////////////////////////
     /// Parte sem octree - ver como o tempo varia
     ///

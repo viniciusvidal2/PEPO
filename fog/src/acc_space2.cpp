@@ -224,7 +224,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
 
     cloud->clear();
 
-    // Adiciona somente uma parcial daquela vista em pan
+    // Adiciona somente uma parcial daquela vista em pan - somente pontos novos!
+    float raio_vizinhos = (voxel_size > 0) ? 5*voxel_size/100.0f : 0.03;
+    roo->searchNeighborsKdTree(cloud_normals, parcial, raio_vizinhos, 130.0);
     *parcial += *cloud_normals;
 
     ////////// Salva as coisas temporarias para o juliano
@@ -264,7 +266,6 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
         } else {
             // Procurar por pontos ja existentes e retirar nesse caso
             // Se nao e a ultima
-            float raio_vizinhos = (voxel_size > 0) ? 5*voxel_size/100.0f : 0.03;
             if(abs(cont_aquisicao - msg_angle->pose.pose.orientation.w) > ntilts)
                 roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 130.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
             else // Se for, comparar com a acumulada pra nao repetir pontos do inicio tambem
