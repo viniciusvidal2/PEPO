@@ -1,63 +1,25 @@
-#include "../include/registerobjectoptm.h"
+#include "../include/registerspace.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
-RegisterObjectOptm::RegisterObjectOptm()
-{
-
+RegisterSpace::RegisterSpace(string s, string t):pasta_tgt(t), pasta_src(s)){
+    // Nome das nuvens
+    nomes_nuvens = {"004", "008", "012", "016", "020", "024",
+                    "028", "032", "036", "040", "044", "048"};
+#pragma omp parallel for
+    for(int i=0; i<nomes_nuvens.size(); i++)
+        nomes_nuvens[i] = "pf_" + nomes_nuvens[i] + ".ply";
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-RegisterObjectOptm::~RegisterObjectOptm(){
+RegisterSpace::~RegisterSpace(){
     ros::shutdown();
     ros::waitForShutdown();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointTN>::Ptr cloud){
-    // Le a nuvem
-    PointCloud<PointT>::Ptr cin (new PointCloud<PointT>);
-    loadPLYFile<PointT>(name, *cin);
-    // Retirando indices NaN se existirem
-    vector<int> indicesNaN;
-    removeNaNFromPointCloud(*cin, *cin, indicesNaN);
-    // Filtro de voxels para aliviar a entrada
-    VoxelGrid<PointT> voxel;
-    float lfsz = 0.03;
-    voxel.setLeafSize(lfsz, lfsz, lfsz);
-    // Filtro de profundidade para nao pegarmos muito fundo
-    PassThrough<PointT> pass;
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(0, 7); // Z metros de profundidade
-    // Filtro de ruidos aleatorios
-    StatisticalOutlierRemoval<PointT> sor;
-    sor.setMeanK(10);
-    sor.setStddevMulThresh(2.5);
-    sor.setNegative(false);
-    // Passando filtros
-    sor.setInputCloud(cin);
-    sor.filter(*cin);
-    voxel.setInputCloud(cin);
-//    voxel.filter(*cin);
-    pass.setInputCloud(cin);
-    pass.filter(*cin);
-    sor.setInputCloud(cin);
-    sor.filter(*cin);
-//    // Passando polinomio pra suavizar a parada
-//    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>());
-//    MovingLeastSquares<PointT, PointTN> mls;
-//    mls.setComputeNormals(true);
-//    mls.setInputCloud(cin);
-//    mls.setPolynomialOrder(1);
-//    mls.setSearchMethod(tree);
-//    mls.setSearchRadius(0.05);
-//    mls.process(*cloud);
-    cloud->resize(cin->size());
-#pragma omp parallel for
-    for(size_t i=0; i<cin->size(); i++){
-        cloud->points[i].x = cin->points[i].x; cloud->points[i].y = cin->points[i].y; cloud->points[i].z = cin->points[i].z;
-        cloud->points[i].r = cin->points[i].r; cloud->points[i].g = cin->points[i].g; cloud->points[i].b = cin->points[i].b;
-    }
+void RegisterSpace::readClouds(int ind_src, int ind_tgt){
+
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::projectCloudAndAnotatePixels(PointCloud<PointTN>::Ptr cloud, Mat im, PointCloud<PointTN>::Ptr cloud_pix, float f, Vector3f t, MatrixXi &impix){
+void RegisterSpace::projectCloudAndAnotatePixels(PointCloud<PointTN>::Ptr cloud, Mat im, PointCloud<PointTN>::Ptr cloud_pix, float f, Vector3f t, MatrixXi &impix){
     // Matriz intrinseca e extrinseca
     Matrix3f K;
     K << f, 0, 982,//im.cols/2.0,
@@ -104,7 +66,7 @@ void RegisterObjectOptm::projectCloudAndAnotatePixels(PointCloud<PointTN>::Ptr c
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its){
+Matrix4f RegisterSpace::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its){
     Matrix4f Ticp = Matrix4f::Identity();
 
     // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
@@ -149,7 +111,7 @@ Matrix4f RegisterObjectOptm::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<Point
     return Ticp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, int npontos3d, vector<Point2d> &matches3d,
+void RegisterSpace::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, int npontos3d, vector<Point2d> &matches3d,
                                                       MatrixXi refpix, MatrixXi nowpix, int l){
     /// Calculando descritores SIFT ///
     // Keypoints e descritores para astra e zed
@@ -315,7 +277,7 @@ void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, Poin
     this->plotDebug(imref, imnow, cref, cnow, goodimrefpts, goodimnowpts, matches3d);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::optmizeTransformLeastSquares(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
+Matrix4f RegisterSpace::optmizeTransformLeastSquares(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
     /// Conta dos minimos quadrados
     /// Theta = inv(Xt*X)*Xt*y
     /// Theta sao os coeficientes finais
@@ -352,7 +314,7 @@ Matrix4f RegisterObjectOptm::optmizeTransformLeastSquares(PointCloud<PointTN>::P
     return Tf;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::plotDebug(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2f> pref, vector<Point2f> pnow, vector<Point2d> match){
+void RegisterSpace::plotDebug(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2f> pref, vector<Point2f> pnow, vector<Point2d> match){
     // Imagens temporarias para salvar
     Mat r, n;
     imref.copyTo(r); imnow.copyTo(n);
@@ -400,7 +362,7 @@ void RegisterObjectOptm::plotDebug(Mat imref, Mat imnow, PointCloud<PointTN>::Pt
     savePLYFileBinary<PointTN>(pasta+"debugnowt.ply", *cnt);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
+Matrix4f RegisterSpace::optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
     // Inicia estimador
     registration::TransformationEstimationSVD<PointTN, PointTN> svd;
     PointIndices pref, pnow;
@@ -416,7 +378,7 @@ Matrix4f RegisterObjectOptm::optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, 
     return Tsvd;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n){
+void RegisterSpace::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n){
     // Fazer e calcular vetor de coeficientes para cada ponto correspondente do processo de match
     vector<float> coefs(matches.size());
 #pragma omp parallel for
@@ -445,7 +407,7 @@ void RegisterObjectOptm::filterMatchesLineCoeff(vector<DMatch> &matches, vector<
     matches = temp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::optmizeTransformP2P(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
+Matrix4f RegisterSpace::optmizeTransformP2P(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
     // Inicia estimador
     registration::TransformationEstimationPointToPlaneLLS<PointTN, PointTN, float> p2p;
     PointIndices pref, pnow;
@@ -461,7 +423,7 @@ Matrix4f RegisterObjectOptm::optmizeTransformP2P(PointCloud<PointTN>::Ptr cref, 
     return Tp2p;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-int RegisterObjectOptm::searchNeighbors(MatrixXi im, int r, int c, int l){
+int RegisterSpace::searchNeighbors(MatrixXi im, int r, int c, int l){
     // Aumentando a janela de busca de 2 em dois nos lados ate o limite proposto
     for(int k=1; k < l; k = k+2){
         // Duplo for sobre a vizinhanca pra ver se encontra, e o primeiro de todos leva
@@ -481,7 +443,7 @@ int RegisterObjectOptm::searchNeighbors(MatrixXi im, int r, int c, int l){
     return -1;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, PointCloud<PointTN>::Ptr cobj, float radius, float rate){
+void RegisterSpace::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, PointCloud<PointTN>::Ptr cobj, float radius, float rate){
     if(cnow->size() > 200 && cobj->size() > 200){
         // Iniciar kdtree de busca
         KdTreeFLANN<PointTN> kdtree;
@@ -507,7 +469,7 @@ void RegisterObjectOptm::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, Po
     }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::estimate3DcorrespondenceAndTransformation(PointCloud<PointTN>::Ptr cnow, PointCloud<PointTN>::Ptr cobj){
+Matrix4f RegisterSpace::estimate3DcorrespondenceAndTransformation(PointCloud<PointTN>::Ptr cnow, PointCloud<PointTN>::Ptr cobj){
     // Separando as nuvens em pontos, cor e normais
     PointCloud<PointT>::Ptr cnowp (new PointCloud<PointT>);
     PointCloud<PointT>::Ptr cobjp (new PointCloud<PointT>);
@@ -595,7 +557,7 @@ Matrix4f RegisterObjectOptm::estimate3DcorrespondenceAndTransformation(PointClou
     return transf;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::readNVM(string folder, string nome, vector<string> &clouds, vector<string> &images, vector<Matrix4f> &poses, float &foco){
+void RegisterSpace::readNVM(string folder, string nome, vector<string> &clouds, vector<string> &images, vector<Matrix4f> &poses, float &foco){
     // Objetos para leitura das linhas
     ifstream nvm;
     string linha_atual;

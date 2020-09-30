@@ -226,7 +226,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
 
     // Adiciona somente uma parcial daquela vista em pan - somente pontos novos!
     float raio_vizinhos = (voxel_size > 0) ? 5*voxel_size/100.0f : 0.03;
-    roo->searchNeighborsKdTree(cloud_normals, parcial, raio_vizinhos, 130.0);
+    roo->searchNeighborsKdTree(cloud_normals, parcial, raio_vizinhos, 200.0);
     *parcial += *cloud_normals;
 
     ////////// Salva as coisas temporarias para o juliano

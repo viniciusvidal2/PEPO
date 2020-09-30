@@ -1,5 +1,5 @@
-#ifndef REGISTEROBJECTOPTM_H
-#define REGISTEROBJECTOPTM_H
+#ifndef REGISTERSPACE_H
+#define REGISTERSPACE_H
 
 #include <string>
 #include <math.h>
@@ -56,11 +56,11 @@ using namespace Eigen;
 typedef PointXYZRGB       PointT ;
 typedef PointXYZRGBNormal PointTN;
 
-class RegisterObjectOptm
+class RegisterSpace
 {
 public:
-    RegisterObjectOptm();
-    virtual ~RegisterObjectOptm();
+    RegisterSpace(string s, string t);
+    virtual ~RegisterSpace();
     void readCloudAndPreProcess(string name, PointCloud<PointTN>::Ptr cloud);
     void projectCloudAndAnotatePixels(PointCloud<PointTN>::Ptr cloud, Mat im, PointCloud<PointTN>::Ptr cloud_pix, float f, Vector3f t, MatrixXi &impix);
     Matrix4f icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
@@ -76,6 +76,9 @@ private:
     void plotDebug(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2f> pref, vector<Point2f> pnow, vector<Point2d> match);
     void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);
     int searchNeighbors(MatrixXi im, int r, int c, int l);
+
+    string pasta_tgt, pasta_src;
+    vector<string> nomes_nuvens;
 };
 
 #endif // REGISTEROBJECTOPTM_H
