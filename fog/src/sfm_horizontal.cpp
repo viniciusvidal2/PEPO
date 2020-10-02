@@ -8,8 +8,8 @@ using namespace std;
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "sfm_horizontal");
-  ros::NodeHandle nh;
   ros::NodeHandle n_("~");
+  pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
   ROS_INFO("Iniciando o no de SFM para encontrar movimentacao relativa entre duas aquisicoes ...");
 
   /// Parametros de entrada
@@ -72,12 +72,24 @@ int main(int argc, char **argv)
   ROS_INFO("Calculando matches e melhor combinacao de imagens ...");
   sfm.surf_matches_matrix_encontrar_melhor();
 
-  /// Pegar pontos correspondentes em 2D para procurar na nuvem certa em 3D
+  /// Transformacao relativa por imagens
   ///
-  sfm.obter_correspondencias_3D_e_T();
+  ROS_INFO("Calculando pose relativa por imagens correspondentes ...");
+  sfm.calcular_pose_relativa();
+
+  /// Transformar o frames das duas nuvens com a transformacao relativa
+  ///
+  ROS_INFO("Pose da transformacao final ...");
+  Matrix4f T = Matrix4f::Identity();
+  PointCloud<PointTN>::Ptr tgt (new PointCloud<PointTN>);
+  PointCloud<PointTN>::Ptr src (new PointCloud<PointTN>);
+  sfm.obter_transformacao_final(T, tgt, src);
 
   /// Transformacao estimada entre as nuvens
   ///
+  ros::Time tempo = ros::Time::now();
+  Matrix4f Ticp = sfm.icp(tgt, src, 3, 30);
+  ROS_WARN("Tempo para o icp: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 
   ROS_INFO("Processo terminado.");
   ros::spinOnce();

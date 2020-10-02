@@ -94,10 +94,11 @@ public:
   void surf_matches_matrix_encontrar_melhor();
   void calcular_pose_relativa();
   void set_debug(bool b);
-  void obter_transformacao_final(Matrix4f &T);
+  void obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, PointCloud<PointTN>::Ptr src);
   void get_matched_keypoints(vector<Point2f> &kptgt, vector<Point2f> &kpsrc);
   void get_indices_imagens(int &t, int &s);
   void obter_correspondencias_3D_e_T();
+  Matrix4f icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
 
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);
@@ -111,8 +112,9 @@ private:
   vector<Matrix3f> rots_src, rots_tgt;
   Matrix3f Rrel;
   Vector3f trel;
+  Matrix3f R_src_tgt;
 
-  vector<vector<KeyPoint>> kpts_tgt, kpts_src;
+  vector< vector<KeyPoint> > kpts_tgt, kpts_src;
   vector<Mat> descp_tgt, descp_src;
 
   vector<KeyPoint> best_kptgt, best_kpsrc;
