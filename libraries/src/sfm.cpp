@@ -598,7 +598,6 @@ void SFM::filtrar_ruidos_inpaint(MatrixXf &dt, MatrixXf &ds){
         MatrixXf mask(lado, lado);
         mask = ds.block<lado,lado>(u-l, v-l);
         temps(u, v) = (mask.minCoeff() != 0) ? mask.minCoeff() : mask.maxCoeff();
-        cout << mask.maxCoeff() << endl;
       }
     }
   }
@@ -609,44 +608,27 @@ void SFM::filtrar_ruidos_inpaint(MatrixXf &dt, MatrixXf &ds){
 
   // Criar imagens em 1 canal 8 bits e mascaras de uma vez
   Mat t8c(imrows, imcols, CV_8UC1)  , s8c(imrows, imcols, CV_8UC1)  ;
-//  Mat maskt(imrows, imcols, CV_8UC1), masks(imrows, imcols, CV_8UC1);
 #pragma omp parallel for
   for(int u=0; u<imrows; u++){
     for(int v=0; v<imcols; v++){
       t8c.at<u_int8_t>(u, v) = int(255.0/tma*(dt(u, v)));
       s8c.at<u_int8_t>(u, v) = int(255.0/sma*(ds(u, v)));
-//      maskt.at<u_int8_t>(u, v) = (dt(u, v) == 0) ? 255 : 0;
-//      masks.at<u_int8_t>(u, v) = (ds(u, v) == 0) ? 255 : 0;
     }
   }
 
-//  // Aplicar inpainting
-//  Mat outt(imrows, imcols, CV_8UC1), outs(imrows, imcols, CV_8UC1);
-//  inpaint(t8c, maskt, outt, 5, INPAINT_TELEA);
-//  inpaint(s8c, masks, outs, 5, INPAINT_TELEA);
-
-//  // Trazer de volta para imagens de distancia, onde antes tinha 0, resultado do inpaint
-//#pragma omp parallel for
-//  for(int u=0; u<imrows; u++){
-//    for(int v=0; v<imcols; v++){
-//      if(dt(u, v) == 0)
-//        dt(u, v) = float(outt.at<u_int8_t>(u, v))/255.0*tma;
-//      if(ds(u, v) == 0)
-//        ds(u, v) = float(outs.at<u_int8_t>(u, v))/255.0*sma;
-//    }
-//  }
-
-  Mat debugt(imrows, imcols, CV_8UC3), debugs(imrows, imcols, CV_8UC3);
-  cvtColor(t8c, debugt, CV_GRAY2BGR);
-  cvtColor(s8c, debugs, CV_GRAY2BGR);
-  for(int i=0; i<best_kpsrc.size(); i++){
-    int r = rand()*255, b = rand()*255, g = rand()*255;
-    circle(debugt, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
-    circle(debugs, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
+  if(debug){
+    Mat debugt(imrows, imcols, CV_8UC3), debugs(imrows, imcols, CV_8UC3);
+    cvtColor(t8c, debugt, CV_GRAY2BGR);
+    cvtColor(s8c, debugs, CV_GRAY2BGR);
+    for(int i=0; i<best_kpsrc.size(); i++){
+      int r = rand()*255, b = rand()*255, g = rand()*255;
+      circle(debugt, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
+      circle(debugs, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
+    }
+    imshow("target", debugt);
+    imshow("source", debugs);
+    waitKey(0);
   }
-  imshow("target", debugt);
-  imshow("source", debugs);
-  waitKey(0);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m){
