@@ -26,6 +26,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/photo.hpp>
 
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -103,6 +104,9 @@ public:
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);
   void ler_nuvens_correspondentes();
+  void estimar_escala_translacao();
+  void filtrar_ruidos_inpaint(MatrixXf &dt, MatrixXf &ds);
+  void filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m);
 
   string pasta_src, pasta_tgt;
   vector<string> imagens_src, imagens_tgt;
@@ -110,6 +114,7 @@ private:
   int imcols, imrows;
 
   vector<Matrix3f> rots_src, rots_tgt;
+  Vector3f t_laser_cam;
   Matrix3f Rrel;
   Vector3f trel;
   Matrix3f R_src_tgt;
