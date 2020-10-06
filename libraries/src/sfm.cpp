@@ -50,9 +50,6 @@ void SFM::obter_dados(vector<string> linhas_src, vector<string> linhas_tgt){
     foco << stof(splits[13]), stof(splits[14]);
     centro_otico << stof(splits[15]), stof(splits[16]);
   }
-//  K.at<double>(0, 0) = foco(0)        ; K.at<double>(1, 1) = foco(1);
-//  K.at<double>(0, 2) = centro_otico(0); K.at<double>(1, 2) = centro_otico(1);
-//  K.at<double>(2, 2) = 1;
   K.at<double>(0, 0) = 375; K.at<double>(1, 1) = 374;
   K.at<double>(0, 2) = 245; K.at<double>(1, 2) = 142;
   K.at<double>(2, 2) = 1;
@@ -93,10 +90,13 @@ void SFM::calcular_features_surf(){
     imcols = imtgt.cols; imrows = imtgt.rows;
 
     // Descritores SURF calculados
-    float min_hessian = 2000;
-    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
-    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+//    float min_hessian = 100;
+//    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
+//    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+//    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
+    sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+    sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
 
     // Salvando no vetor de keypoints
     kpts_tgt[i] = kptgt;
@@ -110,7 +110,7 @@ void SFM::calcular_features_surf(){
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::surf_matches_matrix_encontrar_melhor(){
   // Ajustar matriz de quantidade de matches
-  MatrixXi matches_count(descp_tgt.size(), descp_src.size());
+  MatrixXi matches_count = MatrixXi::Zero(descp_tgt.size(), descp_src.size());
   vector<vector<  vector<DMatch> >> matriz_matches(descp_tgt.size());
   for(int i=0; i<matriz_matches.size(); i++)
     matriz_matches.at(i).resize(descp_src.size());
@@ -126,20 +126,25 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
     for(int j=0; j<descp_src.size(); j++){
       vector<vector<DMatch>> matches;
       vector<DMatch> good_matches;
-      matcher->knnMatch(descp_src[j], descp_tgt[i], matches, 2);
-      for (size_t k = 0; k < matches.size(); k++){
-        if (matches.at(k).size() >= 2){
-          if (matches.at(k).at(0).distance < 0.65*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
-            good_matches.push_back(matches.at(k).at(0));
+      if(!descp_src[j].empty() && !descp_tgt[i].empty()){
+        matcher->knnMatch(descp_src[j], descp_tgt[i], matches, 2);
+        for (size_t k = 0; k < matches.size(); k++){
+          if (matches.at(k).size() >= 2){
+            if (matches.at(k).at(0).distance < 0.8*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
+              good_matches.push_back(matches.at(k).at(0));
+          }
+        }
+        if(good_matches.size() > 0){
+          // Filtrar keypoints repetidos
+          this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
+          // Filtrar por matches que nao sejam muito horizontais
+          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(30));
+
+          // Anota quantas venceram nessa combinacao
+          matches_count(i, j)        = good_matches.size();
+          matriz_matches.at(i).at(j) = good_matches;
         }
       }
-      // Filtrar keypoints repetidos
-      this->filtrar_matches_keypoints_repetidos(kpts_tgt[i], kpts_src[i], good_matches);
-      // Filtrar por matches que nao sejam muito horizontais
-      this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(30));
-      // Anota quantas venceram nessa combinacao
-      matches_count(i, j)        = good_matches.size();
-      matriz_matches.at(i).at(j) = good_matches;
     }
   }
 
@@ -166,7 +171,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
   for(auto m:best_matches){
     best_kptgt.emplace_back(curr_kpts_tgt[m.trainIdx]);
     best_kpsrc.emplace_back(curr_kpts_src[m.queryIdx]);
-    cout << best_kptgt[best_kptgt.size()-1].pt << " " << best_kpsrc[best_kpsrc.size()-1].pt << " " << m.trainIdx << " " << curr_kpts_tgt.size() << " " << m.queryIdx << " " << curr_kpts_src.size() << endl;
+//    cout << best_kptgt[best_kptgt.size()-1].pt << " " << best_kpsrc[best_kpsrc.size()-1].pt << " " << m.trainIdx << " " << curr_kpts_tgt.size() << " " << m.queryIdx << " " << curr_kpts_src.size() << endl;
   }
 
   // Plotar imagens
@@ -227,32 +232,17 @@ void SFM::ler_nuvens_correspondentes(){
   string nsrc = "acumulada.ply";
   loadPLYFile<PointTN>(pasta_tgt+ntgt, *cloud_tgt);
   loadPLYFile<PointTN>(pasta_src+nsrc, *cloud_src);
-  // Rotacionar a nuvem de acordo com a entrada - frame da camera
-  // e filtrar o que esta nas costas
-  if(debug)
-    cout << "\nTirando as costas ..." << endl;
-  Quaternion<float> qt(rots_tgt[im_tgt_indice]);
-  transformPointCloudWithNormals<PointTN>(*cloud_tgt, *cloud_tgt, Vector3f::Zero(), qt);
-//  PassThrough<PointTN> pass;
-//  pass.setFilterFieldName("z");
-//  pass.setFilterLimits(1, 100);
-//  pass.setInputCloud(cloud_tgt);
-//  pass.filter(*cloud_tgt);
-  Quaternion<float> qs(rots_src[im_src_indice]);
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Vector3f::Zero(), qs);
-//  pass.setInputCloud(cloud_src);
-//  pass.filter(*cloud_src);
 
-  // Filtrar pelo angulo de visao da camera, considerando ai thresh graus
-  // redondos por exemplo em ambas as direcoes
   if(debug)
     cout << "\nTirando FOV ..." << endl;
   float thresh = 80.0/2.0;
   PointIndices::Ptr indt (new PointIndices);
   float d;
   for(size_t i=0; i<cloud_tgt->size(); i++){
-    d = sqrt( pow((*cloud_tgt)[i].x, 2) + pow((*cloud_tgt)[i].y, 2) + pow((*cloud_tgt)[i].z, 2) );
-    if(abs(acos( (*cloud_tgt)[i].z / d )) < DEG2RAD(thresh) && (*cloud_tgt)[i].z > 0)
+    Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
+    p = rots_tgt[im_tgt_indice]*p;
+    d = p.norm();
+    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
       indt->indices.push_back(i);
   }
   ExtractIndices<PointTN> extract;
@@ -261,149 +251,18 @@ void SFM::ler_nuvens_correspondentes(){
   extract.filter(*cloud_tgt);
   PointIndices::Ptr inds (new PointIndices);
   for(size_t i=0; i<cloud_src->size(); i++){
-    d = sqrt( pow((*cloud_src)[i].x, 2) + pow((*cloud_src)[i].y, 2) + pow((*cloud_src)[i].z, 2) );
-    if(abs(acos( (*cloud_src)[i].z / d )) < DEG2RAD(thresh) && (*cloud_src)[i].z > 0)
+    Vector3f p{(*cloud_src)[i].x, (*cloud_src)[i].y, (*cloud_src)[i].z};
+    p = rots_src[im_src_indice]*p;
+    d = p.norm();
+    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
       inds->indices.push_back(i);
   }
   extract.setIndices(inds);
   extract.setInputCloud(cloud_src);
   extract.filter(*cloud_src);
 
-  // Trazer as nuvens de volta aos seus respectivos frames
-  transformPointCloudWithNormals<PointTN>(*cloud_tgt, *cloud_tgt, Vector3f::Zero(), qt.inverse());
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Vector3f::Zero(), qs.inverse());
   if(debug)
     cout << "\nPronto a leitura." << endl;
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::obter_correspondencias_3D_e_T(){
-  // Ler nuvens referentes as imagens correspondentes
-  this->ler_nuvens_correspondentes();
-  // Thresh para aceitar o ponto (pixels)
-  float thresh = 10;
-  // Matriz intrinseca em Eigen
-  Matrix3f K_;
-  cv2eigen(K, K_);
-  /// Para nuvem tgt
-  ///
-  if(debug)
-    cout << "\nProcurando pontos na tgt ..." << endl;
-  // Nuvem suporte com mesma quantidade de pontos das correspondencias
-  PointCloud<PointTN>::Ptr ct (new PointCloud<PointTN>);
-  ct->resize(best_kptgt.size());
-  // Projetar cada ponto em paralelo - se chegar perto o suficiente do pixel, e isso ai mesmo
-#pragma omp parallel for
-  for(size_t i = 0; i < cloud_tgt->size(); i++){
-    Vector3f X_{cloud_tgt->points[i].x, cloud_tgt->points[i].y, cloud_tgt->points[i].z};
-    Vector3f X;
-    X = rots_tgt[im_tgt_indice]*X_;
-    X = K_*X;
-    if(X(2) > 0){
-      X = X/X(2);
-      // Se caiu dentro da imagem
-      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows){
-        // Procura no vetor de correspondencias se perto de alguma, se sim anota esse ponto naquela posicao do pixel no vetor
-#pragma omp parallel for
-        for(int j=0; j<best_kptgt.size(); j++){
-          if(sqrt(pow(best_kptgt[j].pt.x - X(0), 2) + pow(best_kptgt[j].pt.y - X(1), 2)) < thresh){
-            ct->points[j] = cloud_tgt->points[i];
-            ct->points[j].g = 255; ct->points[j].r = 0; ct->points[j].b = 0;
-          }
-        }
-      }
-    }
-  }
-  /// Para nuvem src
-  ///
-  if(debug)
-    cout << "\nProcurando pontos na src ..." << endl;
-  // Nuvem suporte com mesma quantidade de pontos das correspondencias
-  PointCloud<PointTN>::Ptr cs (new PointCloud<PointTN>);
-  cs->resize(best_kpsrc.size());
-  // Projetar cada ponto em paralelo - se chegar perto o suficiente do pixel, e isso ai mesmo
-#pragma omp parallel for
-  for(size_t i = 0; i < cloud_src->size(); i++){
-    Vector3f X_{cloud_src->points[i].x, cloud_src->points[i].y, cloud_src->points[i].z};
-    Vector3f X;
-    X = rots_src[im_src_indice]*X_;
-    X = K_*X;
-    if(X(2) > 0){
-      X = X/X(2);
-      // Se caiu dentro da imagem
-      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows){
-        // Procura no vetor de correspondencias se perto de alguma, se sim anota esse ponto naquela posicao do pixel no vetor
-#pragma omp parallel for
-        for(int j=0; j<best_kpsrc.size(); j++){
-          if(sqrt(pow(best_kpsrc[j].pt.x - X(0), 2) + pow(best_kpsrc[j].pt.y - X(1), 2)) < thresh){
-            cs->points[j] = cloud_src->points[i];
-            cs->points[j].g = 0; cs->points[j].r = 255; cs->points[j].b = 255;
-          }
-        }
-      }
-    }
-  }
-  /// Estimar a transformacao entre os pontos correspondentes
-  ///
-  // Filtrar por pontos na origem nao vistos
-  PointIndices::Ptr indices (new PointIndices);
-  for(size_t i=0; i<cs->size(); i++){
-    if((*cs)[i].x != 0 && (*cs)[i].y != 0 && (*cs)[i].z != 0 &&
-       (*ct)[i].x != 0 && (*ct)[i].y != 0 && (*ct)[i].z != 0)
-      indices->indices.push_back(i);
-  }
-  if(debug)
-    cout << "\nMatches que vingaram nas duas nuvens: " << indices->indices.size() << endl;
-  ExtractIndices<PointTN> extract;
-  extract.setIndices(indices);
-  extract.setInputCloud(ct);
-  extract.filter(*ct);
-  extract.setInputCloud(cs);
-  extract.filter(*cs);
-  // Estimar transformacao por SVD se houver pontos suficientes
-  if(indices->indices.size() >= 5){
-    TransformationEstimationSVD<PointTN, PointTN> svd;
-    svd.estimateRigidTransformation(*cs, *ct, Tsvd);
-  }
-
-  if(debug){
-    // Mostrar transformacao aproximada
-    cout << "\nTransformacao por svd:\n" << Tsvd << endl;
-    // Transformar a nuvem source com a transformacao estimada
-    transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd);
-    transformPointCloudWithNormals<PointTN>(*cs, *cs, Tsvd);
-    // Salvar ambas as nuvens na pasta source pra comparar
-    savePLYFileASCII<PointTN>(pasta_src+"debug_tgt.ply", *cloud_tgt);
-    savePLYFileASCII<PointTN>(pasta_src+"debug_src.ply", *cloud_src);
-    savePLYFileASCII<PointTN>(pasta_src+"kpts_tgt.ply", *ct);
-    savePLYFileASCII<PointTN>(pasta_src+"kpts_src.ply", *cs);
-  }
-
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::set_debug(bool b){
-  debug = b;
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n){
-  // Fazer e calcular vetor de coeficientes para cada ponto correspondente do processo de match
-  vector<float> coefs(matches.size());
-#pragma omp parallel for
-  for(int i=0; i<matches.size(); i++){
-    float xr, yr, xn, yn;
-    xr = kpref[matches[i].queryIdx].pt.x;
-    yr = kpref[matches[i].queryIdx].pt.y;
-    xn = kpnow[matches[i].trainIdx].pt.x + width;
-    yn = kpnow[matches[i].trainIdx].pt.y;
-    // Calcular os coeficientes angulares
-    coefs[i] = (yn - yr)/(xn - xr);
-  }
-  // Filtrar o vetor de matches na posicao que os coeficientes estejam fora por ngraus
-  vector<DMatch> temp;
-  for(int i=0; i<coefs.size(); i++){
-    if(abs(coefs[i]) < n)
-      temp.push_back(matches[i]);
-  }
-  matches = temp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::calcular_pose_relativa(){
@@ -544,33 +403,36 @@ void SFM::estimar_escala_translacao(){
   ///
   vector<Vector3f> tts_vec;
   for(int i=0; i<best_kpsrc.size(); i++){
-    float x, y, z;
-    Vector3f Ps, Pt, tts;
+    if(dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x) > 0 && ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x) > 0){
+      float x, y, z;
+      Vector3f Ps, Pt, tts;
 
-    z = ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x);
-    x = ((best_kpsrc[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-    y = ((best_kpsrc[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-    Ps << x, y, z;
-    z = ds(best_kptgt[i].pt.y, best_kptgt[i].pt.x);
-    x = ((best_kptgt[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-    y = ((best_kptgt[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-    Pt << x, y, z;
+      z = ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x);
+      x = ((best_kpsrc[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
+      y = ((best_kpsrc[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
+      Ps << x, y, z;
+      z = dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x);
+      x = ((best_kptgt[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
+      y = ((best_kptgt[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
+      Pt << x, y, z;
 
-    tts = Pt - Rrel*Ps;
-    // Angulo em relacao a estimativa tida pela imagens
-    float cos_theta = (tts.dot(trel))/(tts.norm()*trel.norm());
-    float theta = RAD2DEG(acos(cos_theta));
-    cout << theta << endl;
-    // Se esta com um angulo pequeno, temos bom chute
-    if(abs(theta) < 15.0 || abs(theta - 180.0) < 15.0)
-      tts_vec.emplace_back(tts);
+      tts = Pt - Rrel*Ps;
+      // Angulo em relacao a estimativa tida pela imagens
+      float cos_theta = (tts.dot(trel))/(tts.norm()*trel.norm());
+      float theta = RAD2DEG(acos(cos_theta));
+      cout << theta << endl;
+      // Se esta com um angulo pequeno, temos bom chute
+      if(abs(theta) < 15.0 || abs(theta - 180.0) < 15.0)
+        tts_vec.emplace_back(tts);
+    }
   }
 
   // Tira a media do somatorio dos vetores e atribui ao que antes era a translacao
   // so em escala, agora vai para o mundo real
   Vector3f acc;
   for(auto t:tts_vec) acc += t;
-  trel = acc/tts_vec.size();
+  if(tts_vec.size() > 0) trel = acc/tts_vec.size(); else trel = 10*trel;
+//  trel = (tts_vec.size() > 0) ? acc/tts_vec.size() : 10*trel;
 
   if(debug){
     for(int i=0; i<tts_vec.size(); i++)
@@ -697,5 +559,31 @@ void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoi
 
 //  // Retornando as matches que restaram
 //  m = otimas_matches;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void SFM::set_debug(bool b){
+  debug = b;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void SFM::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n){
+  // Fazer e calcular vetor de coeficientes para cada ponto correspondente do processo de match
+  vector<float> coefs(matches.size());
+#pragma omp parallel for
+  for(int i=0; i<matches.size(); i++){
+    float xr, yr, xn, yn;
+    xr = kpref[matches[i].queryIdx].pt.x;
+    yr = kpref[matches[i].queryIdx].pt.y;
+    xn = kpnow[matches[i].trainIdx].pt.x + width;
+    yn = kpnow[matches[i].trainIdx].pt.y;
+    // Calcular os coeficientes angulares
+    coefs[i] = (yn - yr)/(xn - xr);
+  }
+  // Filtrar o vetor de matches na posicao que os coeficientes estejam fora por ngraus
+  vector<DMatch> temp;
+  for(int i=0; i<coefs.size(); i++){
+    if(abs(coefs[i]) < n)
+      temp.push_back(matches[i]);
+  }
+  matches = temp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

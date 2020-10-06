@@ -318,6 +318,7 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
     // Retirando pontos que vem do edge nao projetados ou com erro
     ros::Time tempo = ros::Time::now();
     this->removeNotProjectedThroughDefinedColor(cin, 200, 200, 200);
+    cout << "\nDepois de tirar nao projetados: " << cin->size() << endl;
     std::vector<int> indicesnan;
     removeNaNFromPointCloud<PointT>(*cin, *cin, indicesnan);
     // Filtro de voxels para aliviar a entrada
@@ -327,14 +328,15 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
         voxel.setInputCloud(cin);
         voxel.filter(*cin);
     }
-    // Filtro de profundidade para nao pegarmos muito fundo
-    PassThrough<PointT> pass;
-    pass.setFilterFieldName("z");
-    pass.setFilterLimits(0, d); // Z metros de profundidade
-    pass.setInputCloud(cin);
-    pass.filter(*cin);
+//    // Filtro de profundidade para nao pegarmos muito fundo
+//    PassThrough<PointT> pass;
+//    pass.setFilterFieldName("z");
+//    pass.setFilterLimits(0, d); // Z metros de profundidade
+//    pass.setInputCloud(cin);
+//    pass.filter(*cin);
     tempo_cor = (ros::Time::now() - tempo).toSec();
     tempo = ros::Time::now();
+//    cout << "\nDepois de tirar distancia: " << cin->size() << endl;
 
     bool com_octree = true;
     /////////////////////////////////////////////////////////////
@@ -421,8 +423,8 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
             sor.filter(*temp);
             pontos_demaisfiltros[i] = temp->size();
             // Calcular filtro de covariancia na regiao mais proxima
-            float depth_cov_filter = 5;
-            this->filterCloudDepthCovariance(temp, 100, 1.5, depth_cov_filter);
+//            float depth_cov_filter = 5;
+//            this->filterCloudDepthCovariance(temp, 100, 1.5, depth_cov_filter);
             pontos_covariancia[i] = temp->size();
             tempos_demaisfiltros[i] = (ros::Time::now() - tempo2).toSec();
             tempo2 = ros::Time::now();
@@ -557,7 +559,7 @@ void ProcessCloud::saveImage(cv::Mat img, string nome){
 /////////////////////////////////////////////////////////////////////////////////////////////////
 Matrix3f ProcessCloud::euler2matrix(float r, float p, float y){
     // Ja recebe os angulos aqui em radianos
-    return (AngleAxisf(y, Vector3f::UnitY()) * AngleAxisf(p, Vector3f::UnitX())).matrix();
+    return (AngleAxisf(y, Vector3f::UnitY()) * AngleAxisf(p, Vector3f::UnitX()) * AngleAxisf(r, Vector3f::UnitZ())).matrix();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 std::string ProcessCloud::escreve_linha_nvm(float foco, std::string nome, Eigen::MatrixXf C, Eigen::Quaternion<float> q){
