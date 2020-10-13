@@ -51,6 +51,7 @@
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_distance.h>
 #include <pcl/point_types_conversion.h>
+#include <pcl/octree/octree_search.h>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>

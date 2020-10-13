@@ -189,11 +189,10 @@ void savePointFiles(){
 /// Callback do laser e odometria sincronizado
 ///
 void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_msgs::OdometryConstPtr& msg_angle){
-  // As mensagens trazem angulos em unidade RAD, exceto pan - salvar em DEG
+  // As mensagens trazem angulos em unidade RAD, exceto pan
   roll_cameras.push_back(msg_angle->pose.pose.position.x);
   pan_cameras.push_back(DEG2RAD(raw2deg(int(msg_angle->pose.pose.position.z), "pan")));
   pitch_cameras.push_back(msg_angle->pose.pose.position.y);
-  ROS_INFO("Poses recebidas: %zu.", pan_cameras.size());
   // Atualiza a quantidade de tilts que estamos esperando
   ntilts = int(msg_angle->pose.pose.orientation.x);
 
@@ -213,7 +212,13 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
   PointCloud<PointT>::Ptr cloud (new PointCloud<PointT>);
   fromROSMsg(*msg_cloud, *cloud);
   ROS_INFO("Recebendo nuvem %d com %zu pontos, contador %d e filtrando ...", cont_aquisicao, cloud->size(), contador_nuvens);
+  // Aplica filtro raycasting
+  ROS_INFO("Filtro raycasting ...");
+  float clat = 90.0 - RAD2DEG(pitch_cameras.back()), clon = RAD2DEG(-pan_cameras.back()), fov = 38;
+  if(clon < 0) clon += 360;
+  pc->filterRayCasting(cloud, clat, clon, fov, fov);
   // Realizar pre-processamento
+  ROS_INFO("Pre-processamento com %zu pontos ...", cloud->size());
   PointCloud<PointTN>::Ptr cloud_normals (new PointCloud<PointTN>);
   float tempo_cor, tempo_octree, tempo_demaisfiltros, tempo_normais;
   size_t p_df, p_cov;

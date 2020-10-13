@@ -42,6 +42,7 @@
 #include <pcl/surface/mls.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/conditional_euclidean_clustering.h>
+#include <pcl/octree/octree_search.h>
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -71,6 +72,7 @@ using namespace pcl;
 using namespace pcl::io;
 using namespace cv;
 using namespace Eigen;
+using namespace pcl::octree;
 
 typedef PointXYZRGB       PointT ;
 typedef PointXYZRGBNormal PointTN;
@@ -108,10 +110,13 @@ public:
   MatrixXf getRtcam();
   Vector3f gettCam();
 
+  void filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, float lon_c, float lat_fov, float lon_fov);
+
 private:
 
   void divideInOctreeLevels(PointCloud<PointT>::Ptr cloud, vector<PointCloud<PointT>> &leafs, float level);
   void removeNotProjectedThroughDefinedColor(PointCloud<PointT>::Ptr cloud, int r, int g, int b);
+  void cleanMisreadPoints(PointCloud<PointT>::Ptr cloud);
 
   /// Variaveis
   Matrix3f K1;

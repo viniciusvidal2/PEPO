@@ -90,13 +90,13 @@ void SFM::calcular_features_surf(){
     imcols = imtgt.cols; imrows = imtgt.rows;
 
     // Descritores SURF calculados
-//    float min_hessian = 100;
-//    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
-//    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-//    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
-    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
-    sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-    sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+    float min_hessian = 2000;
+    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
+    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+//    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
+//    sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+//    sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
 
     // Salvando no vetor de keypoints
     kpts_tgt[i] = kptgt;
@@ -130,7 +130,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
         matcher->knnMatch(descp_src[j], descp_tgt[i], matches, 2);
         for (size_t k = 0; k < matches.size(); k++){
           if (matches.at(k).size() >= 2){
-            if (matches.at(k).at(0).distance < 0.8*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
+            if (matches.at(k).at(0).distance < 0.7*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
               good_matches.push_back(matches.at(k).at(0));
           }
         }
@@ -138,7 +138,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
           // Filtrar keypoints repetidos
           this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
           // Filtrar por matches que nao sejam muito horizontais
-          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(30));
+//          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(20));
 
           // Anota quantas venceram nessa combinacao
           matches_count(i, j)        = good_matches.size();
@@ -180,7 +180,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
   resize(im1, im1, Size(im1.cols/4, im1.rows/4));
   resize(im2, im2, Size(im2.cols/4, im2.rows/4));
   for(int i=0; i<best_kpsrc.size(); i++){
-    int r = rand()*255, b = rand()*255, g = rand()*255;
+    int r = rand()%255, b = rand()%255, g = rand()%255;
     circle(im1, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
     circle(im2, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
   }
@@ -208,7 +208,7 @@ void SFM::obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, P
   T.block<3,3>(0, 0) = R_src_tgt;
   // Transformacao final (em translacao)
   trel << 0, 0, 1;
-  trel = (Rrel*rots_tgt[im_tgt_indice].inverse()).transpose()*trel;
+  trel = Rrel*rots_tgt[im_tgt_indice].inverse()*trel;
   this->estimar_escala_translacao();
   T.block<3,1>(0, 3) = trel;
 
@@ -233,33 +233,33 @@ void SFM::ler_nuvens_correspondentes(){
   loadPLYFile<PointTN>(pasta_tgt+ntgt, *cloud_tgt);
   loadPLYFile<PointTN>(pasta_src+nsrc, *cloud_src);
 
-  if(debug)
-    cout << "\nTirando FOV ..." << endl;
-  float thresh = 80.0/2.0;
-  PointIndices::Ptr indt (new PointIndices);
-  float d;
-  for(size_t i=0; i<cloud_tgt->size(); i++){
-    Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
-    p = rots_tgt[im_tgt_indice]*p;
-    d = p.norm();
-    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
-      indt->indices.push_back(i);
-  }
-  ExtractIndices<PointTN> extract;
-  extract.setIndices(indt);
-  extract.setInputCloud(cloud_tgt);
-  extract.filter(*cloud_tgt);
-  PointIndices::Ptr inds (new PointIndices);
-  for(size_t i=0; i<cloud_src->size(); i++){
-    Vector3f p{(*cloud_src)[i].x, (*cloud_src)[i].y, (*cloud_src)[i].z};
-    p = rots_src[im_src_indice]*p;
-    d = p.norm();
-    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
-      inds->indices.push_back(i);
-  }
-  extract.setIndices(inds);
-  extract.setInputCloud(cloud_src);
-  extract.filter(*cloud_src);
+//  if(debug)
+//    cout << "\nTirando FOV ..." << endl;
+//  float thresh = 80.0/2.0;
+//  PointIndices::Ptr indt (new PointIndices);
+//  float d;
+//  for(size_t i=0; i<cloud_tgt->size(); i++){
+//    Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
+//    p = rots_tgt[im_tgt_indice]*p;
+//    d = p.norm();
+//    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
+//      indt->indices.push_back(i);
+//  }
+//  ExtractIndices<PointTN> extract;
+//  extract.setIndices(indt);
+//  extract.setInputCloud(cloud_tgt);
+//  extract.filter(*cloud_tgt);
+//  PointIndices::Ptr inds (new PointIndices);
+//  for(size_t i=0; i<cloud_src->size(); i++){
+//    Vector3f p{(*cloud_src)[i].x, (*cloud_src)[i].y, (*cloud_src)[i].z};
+//    p = rots_src[im_src_indice]*p;
+//    d = p.norm();
+//    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
+//      inds->indices.push_back(i);
+//  }
+//  extract.setIndices(inds);
+//  extract.setInputCloud(cloud_src);
+//  extract.filter(*cloud_src);
 
   if(debug)
     cout << "\nPronto a leitura." << endl;
@@ -359,86 +359,139 @@ Matrix4f SFM::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, 
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::estimar_escala_translacao(){
-  /// Projetar ambas as imagens na matriz - imagem de profundidade
-  ///
-  MatrixXf ds = MatrixXf::Zero(imrows, imcols);
-  MatrixXf dt = MatrixXf::Zero(imrows, imcols);
-  Matrix3f K_;
-  cv2eigen(K, K_);
-  // Imagem profundidade nuvem source
-#pragma omp parallel for
-  for(size_t i=0; i<cloud_src->size(); i++){
-    PointTN p = (*cloud_src)[i];
-    Vector3f X_{p.x, p.y, p.z};
-    Vector3f X, p_;
-    p_ = rots_src[im_src_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
-    X = K_*p_;
-    if(X(2) > 0){
-      X = X/X(2);
-      // Se caiu dentro da imagem
-      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
-        ds(X(1), X(0)) = p_(2);
-    }
-  }
-  // Imagem profundidade nuvem target
-#pragma omp parallel for
-  for(size_t i=0; i<cloud_tgt->size(); i++){
-    PointTN p = (*cloud_tgt)[i];
-    Vector3f X_{p.x, p.y, p.z};
-    Vector3f X, p_;
-    p_ = rots_tgt[im_tgt_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
-    X = K_*p_;
-    if(X(2) > 0){
-      X = X/X(2);
-      // Se caiu dentro da imagem
-      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
-        dt(X(1), X(0)) = p_(2);
-    }
-  }
-
-  this->filtrar_ruidos_inpaint(dt, ds);
-
-  /// Encontrar Keypoints nas imagens de profundidade - transf. a partir da RGB
-  /// Calular a translacao de sorce->target que ajusta melhor aqueles pontos
-  ///
-  vector<Vector3f> tts_vec;
+  // Parametros intrinsecos da camera explicitados para facilitar
+  float fx = K.at<double>(0, 0), fy = K.at<double>(1, 1), cx = K.at<double>(0, 2), cy = K.at<double>(1, 2);
+  // Lista de pontos 3D correspondentes a partir de cada match
+  vector<Vector3f> corresp_3d_src(best_kpsrc.size()), corresp_3d_tgt(best_kptgt.size());
+  cout << "\nComecando a vasculhar os matches procurando por octree seus pontos na nuvem ..." << endl;
+  // Para cada match
   for(int i=0; i<best_kpsrc.size(); i++){
-    if(dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x) > 0 && ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x) > 0){
-      float x, y, z;
-      Vector3f Ps, Pt, tts;
+    // Pegar o keypoint na imagem em questao
+    float us, vs, ut, vt;
+    us = best_kpsrc[i].pt.x; vs = best_kpsrc[i].pt.y;
+    ut = best_kptgt[i].pt.x; vt = best_kptgt[i].pt.y;
+    // Calcular a direcao no frame da camera para eles
+    Vector3f dirs, dirt;
+    dirs << (us - cx)/(2.0*fx), -(vs - cy)/(2.0*fy), 1;
+    dirs = dirs/dirs.norm();
+    dirt << (ut - cx)/(2.0*fx), -(vt - cy)/(2.0*fy), 1;
+    dirt = dirt/dirt.norm();
+    // Rotacionar o vetor para o frame local
+    dirs = rots_src[im_src_indice].transpose() * dirs;
+    dirt = rots_tgt[im_tgt_indice].transpose() * dirt;
+    // Aplicar ray casting para saber em que parte da nuvem vai bater
+    octree::OctreePointCloudSearch<PointTN> oct(0.1);
+    octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector aligns, alignt;
+    oct.setInputCloud(cloud_src);
+    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirs, aligns, 1);
+    // Se achou, adicionar na lista de pontos 3D naquele local
+    if(aligns.size() > 0)
+      corresp_3d_src[i] << aligns[0].x, aligns[0].y, aligns[0].z;
+    else
+      corresp_3d_src[i] << 0, 0, 0;
 
-      z = ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x);
-      x = ((best_kpsrc[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-      y = ((best_kpsrc[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-      Ps << x, y, z;
-      z = dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x);
-      x = ((best_kptgt[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-      y = ((best_kptgt[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-      Pt << x, y, z;
-
-      tts = Pt - Rrel*Ps;
-      // Angulo em relacao a estimativa tida pela imagens
-      float cos_theta = (tts.dot(trel))/(tts.norm()*trel.norm());
-      float theta = RAD2DEG(acos(cos_theta));
-      cout << theta << endl;
-      // Se esta com um angulo pequeno, temos bom chute
-      if(abs(theta) < 15.0 || abs(theta - 180.0) < 15.0)
-        tts_vec.emplace_back(tts);
-    }
+    oct.setInputCloud(cloud_tgt);
+    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirt, alignt, 1);
+    // Se achou, adicionar na lista de pontos 3D naquele local
+    if(alignt.size() > 0)
+      corresp_3d_tgt[i] << alignt[0].x, alignt[0].y, alignt[0].z;
+    else
+      corresp_3d_tgt[i] << 0, 0, 0;
   }
 
+  // Para cada ponto resultante do ray cast
+  vector<Vector3f> boas_translacoes;
+  for(int i=0; i < corresp_3d_src.size(); i++){
+    if(!(corresp_3d_src[i].norm() == 0) && !(corresp_3d_tgt[i].norm() == 0)){
+      // Rotacionar ponto para o frame de src->tgt e obter translacao necessaria
+      Vector3f t;
+      t = corresp_3d_tgt[i] - R_src_tgt*corresp_3d_src[i];
+      // Se direcao casa com a inicial proposta pelo match das imagens, ok
+      float theta = RAD2DEG( acos(t.dot(trel)/(t.norm()*trel.norm())) );
+      if(abs(theta < 15))
+        boas_translacoes.push_back(t);
+    }
+  }
+  cout << "\nQuantos pontos foram bem  " << boas_translacoes.size() << endl;
   // Tira a media do somatorio dos vetores e atribui ao que antes era a translacao
   // so em escala, agora vai para o mundo real
   Vector3f acc;
-  for(auto t:tts_vec) acc += t;
-  if(tts_vec.size() > 0) trel = acc/tts_vec.size(); else trel = 10*trel;
-//  trel = (tts_vec.size() > 0) ? acc/tts_vec.size() : 10*trel;
+  for(auto t:boas_translacoes) acc += t;
+  if(boas_translacoes.size() > 0) trel = acc/boas_translacoes.size(); else trel = 10*trel;
 
   if(debug){
-    for(int i=0; i<tts_vec.size(); i++)
-      cout << tts_vec[i] << endl;
+    for(int i=0; i<boas_translacoes.size(); i++)
+      cout << boas_translacoes[i] << endl;
     cout <<"\nT final: " << trel << endl;
   }
+
+//  /// Projetar ambas as imagens na matriz - imagem de profundidade
+//  ///
+//  MatrixXf ds = MatrixXf::Zero(imrows, imcols);
+//  MatrixXf dt = MatrixXf::Zero(imrows, imcols);
+//  Matrix3f K_;
+//  cv2eigen(K, K_);
+//  // Imagem profundidade nuvem source
+//#pragma omp parallel for
+//  for(size_t i=0; i<cloud_src->size(); i++){
+//    PointTN p = (*cloud_src)[i];
+//    Vector3f X_{p.x, p.y, p.z};
+//    Vector3f X, p_;
+//    p_ = rots_src[im_src_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
+//    X = K_*p_;
+//    if(X(2) > 0){
+//      X = X/X(2);
+//      // Se caiu dentro da imagem
+//      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
+//        ds(X(1), X(0)) = p_(2);
+//    }
+//  }
+//  // Imagem profundidade nuvem target
+//#pragma omp parallel for
+//  for(size_t i=0; i<cloud_tgt->size(); i++){
+//    PointTN p = (*cloud_tgt)[i];
+//    Vector3f X_{p.x, p.y, p.z};
+//    Vector3f X, p_;
+//    p_ = rots_tgt[im_tgt_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
+//    X = K_*p_;
+//    if(X(2) > 0){
+//      X = X/X(2);
+//      // Se caiu dentro da imagem
+//      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
+//        dt(X(1), X(0)) = p_(2);
+//    }
+//  }
+
+//  this->filtrar_ruidos_inpaint(dt, ds);
+
+//  /// Encontrar Keypoints nas imagens de profundidade - transf. a partir da RGB
+//  /// Calular a translacao de sorce->target que ajusta melhor aqueles pontos
+//  ///
+//  vector<Vector3f> tts_vec;
+//  for(int i=0; i<best_kpsrc.size(); i++){
+//    if(dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x) > 0 && ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x) > 0){
+//      float x, y, z;
+//      Vector3f Ps, Pt, tts;
+
+//      z = ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x);
+//      x = ((best_kpsrc[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
+//      y = ((best_kpsrc[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
+//      Ps << x, y, z;
+//      z = dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x);
+//      x = ((best_kptgt[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
+//      y = ((best_kptgt[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
+//      Pt << x, y, z;
+
+//      tts = Pt - Rrel*Ps;
+//      // Angulo em relacao a estimativa tida pela imagens
+//      float cos_theta = (tts.dot(trel))/(tts.norm()*trel.norm());
+//      float theta = RAD2DEG(acos(cos_theta));
+//      cout << theta << endl;
+//      // Se esta com um angulo pequeno, temos bom chute
+//      if(abs(theta) < 15.0 || abs(theta - 180.0) < 15.0)
+//        tts_vec.emplace_back(tts);
+//    }
+//  }
 
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

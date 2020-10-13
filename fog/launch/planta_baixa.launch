@@ -1,6 +1,6 @@
 <launch>
 
-<arg name="pasta"     default="gerador_tomada1"/>
+<arg name="pasta"     default="Scanner_obj"/>
 <arg name="resolucao" default="0.04"           />
 <arg name="lado_area" default="20"             />
 

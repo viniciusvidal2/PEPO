@@ -68,10 +68,25 @@ int main(int argc, char **argv)
   // Lendo a nuvem acumulada
   ROS_INFO("Carregando nuvem acumulada do space ...");
   PointCloud<PointT>::Ptr nuvem_inicial (new PointCloud<PointT>);
-  loadPLYFile<PointT>(pasta+"acumulada.ply", *nuvem_inicial);
+  loadPLYFile<PointT>(pasta+"pf_002.ply", *nuvem_inicial);
   ROS_INFO("Nuvem carregada com %zu pontos.", nuvem_inicial->size());
 
+  // Inicia a classe de nuvem de pontos
+  ProcessCloud pc(pasta);
+
+  // Passar filtro de raycasting
+  ROS_INFO("Aplicando filtro de ray casting a partir do centro na acumulada ...");
   ros::Time tempo = ros::Time::now();
+  pc.filterRayCasting(nuvem_inicial, 90, 180, 180, 360);
+  pc.filterCloudDepthCovariance(nuvem_inicial, 50, 1.5, 10);
+  StatisticalOutlierRemoval<PointT> sor;
+  sor.setInputCloud(nuvem_inicial);
+  sor.setMeanK(50);
+  sor.setStddevMulThresh(2);
+  sor.filter(*nuvem_inicial);
+  savePLYFileBinary<PointT>(pasta+"raycasting.ply", *nuvem_inicial);
+  ROS_WARN("Tempo para processamento ray casting: %.2f   Saida de pontos: %zu", (ros::Time::now() - tempo).toSec(), nuvem_inicial->size());
+  tempo = ros::Time::now();
 
   /// Separando a nuvem em clusters perpendiculares ao eixo y - y negativo para cima
   ///
