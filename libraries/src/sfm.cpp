@@ -89,14 +89,32 @@ void SFM::calcular_features_surf(){
     // Salvar aqui as dimensoes da imagem para a sequencia do algoritmo
     imcols = imtgt.cols; imrows = imtgt.rows;
 
-    // Descritores SURF calculados
-    float min_hessian = 2000;
-    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
-    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
-//    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
-//    sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-//    sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+    // Descritores SIFT calculados
+//    float min_hessian = 2000;
+//    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
+//    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+//    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
+    sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
+    sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
+    // Calculando somatorio para cada linha de descritores
+    Mat dtgtsum, dsrcsum;
+    reduce(dtgt, dtgtsum, 1, CV_16UC1);
+    reduce(dsrc, dsrcsum, 1, CV_16UC1);
+    // Normalizando e passando raiz em cada elementos de linha nos descritores da src
+#pragma omp parallel for
+    for(int i=0; i<dsrc.rows; i++){
+      for(int j=0; j<dsrc.cols; j++){
+        dsrc.at<float>(i, j) = sqrt(dsrc.at<float>(i, j) / (dsrcsum.at<float>(i, 0) + numeric_limits<float>::epsilon()));
+      }
+    }
+    // Normalizando e passando raiz em cada elementos de linha nos descritores da tgt
+#pragma omp parallel for
+    for(int i=0; i<dtgt.rows; i++){
+      for(int j=0; j<dtgt.cols; j++){
+        dtgt.at<float>(i, j) = sqrt(dtgt.at<float>(i, j) / (dtgtsum.at<float>(i, 0) + numeric_limits<float>::epsilon()));
+      }
+    }
 
     // Salvando no vetor de keypoints
     kpts_tgt[i] = kptgt;
@@ -130,7 +148,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
         matcher->knnMatch(descp_src[j], descp_tgt[i], matches, 2);
         for (size_t k = 0; k < matches.size(); k++){
           if (matches.at(k).size() >= 2){
-            if (matches.at(k).at(0).distance < 0.7*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
+            if (matches.at(k).at(0).distance < 0.8*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
               good_matches.push_back(matches.at(k).at(0));
           }
         }
@@ -138,7 +156,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
           // Filtrar keypoints repetidos
           this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
           // Filtrar por matches que nao sejam muito horizontais
-          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(30));
+          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(10));
 
           // Anota quantas venceram nessa combinacao
           matches_count(i, j)        = good_matches.size();
@@ -171,7 +189,6 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
   for(auto m:best_matches){
     best_kptgt.emplace_back(curr_kpts_tgt[m.trainIdx]);
     best_kpsrc.emplace_back(curr_kpts_src[m.queryIdx]);
-//    cout << best_kptgt[best_kptgt.size()-1].pt << " " << best_kpsrc[best_kpsrc.size()-1].pt << " " << m.trainIdx << " " << curr_kpts_tgt.size() << " " << m.queryIdx << " " << curr_kpts_src.size() << endl;
   }
 
   // Plotar imagens
@@ -405,126 +422,6 @@ void SFM::estimar_escala_translacao(){
 //      cout << boas_translacoes[i] << endl;
     cout <<"\nT final: " << trel << endl;
   }
-
-//  /// Projetar ambas as imagens na matriz - imagem de profundidade
-//  ///
-//  MatrixXf ds = MatrixXf::Zero(imrows, imcols);
-//  MatrixXf dt = MatrixXf::Zero(imrows, imcols);
-//  Matrix3f K_;
-//  cv2eigen(K, K_);
-//  // Imagem profundidade nuvem source
-//#pragma omp parallel for
-//  for(size_t i=0; i<cloud_src->size(); i++){
-//    PointTN p = (*cloud_src)[i];
-//    Vector3f X_{p.x, p.y, p.z};
-//    Vector3f X, p_;
-//    p_ = rots_src[im_src_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
-//    X = K_*p_;
-//    if(X(2) > 0){
-//      X = X/X(2);
-//      // Se caiu dentro da imagem
-//      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
-//        ds(X(1), X(0)) = p_(2);
-//    }
-//  }
-//  // Imagem profundidade nuvem target
-//#pragma omp parallel for
-//  for(size_t i=0; i<cloud_tgt->size(); i++){
-//    PointTN p = (*cloud_tgt)[i];
-//    Vector3f X_{p.x, p.y, p.z};
-//    Vector3f X, p_;
-//    p_ = rots_tgt[im_tgt_indice]*X_ + t_laser_cam; // Somente o ponto rotacionado para o frame da camera e tomarmos assim a profundidade em Z
-//    X = K_*p_;
-//    if(X(2) > 0){
-//      X = X/X(2);
-//      // Se caiu dentro da imagem
-//      if(floor(X(0)) > 0 && floor(X(0)) < imcols && floor(X(1)) > 0 && floor(X(1)) < imrows)
-//        dt(X(1), X(0)) = p_(2);
-//    }
-//  }
-
-//  this->filtrar_ruidos_inpaint(dt, ds);
-
-//  /// Encontrar Keypoints nas imagens de profundidade - transf. a partir da RGB
-//  /// Calular a translacao de sorce->target que ajusta melhor aqueles pontos
-//  ///
-//  vector<Vector3f> tts_vec;
-//  for(int i=0; i<best_kpsrc.size(); i++){
-//    if(dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x) > 0 && ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x) > 0){
-//      float x, y, z;
-//      Vector3f Ps, Pt, tts;
-
-//      z = ds(best_kpsrc[i].pt.y, best_kpsrc[i].pt.x);
-//      x = ((best_kpsrc[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-//      y = ((best_kpsrc[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-//      Ps << x, y, z;
-//      z = dt(best_kptgt[i].pt.y, best_kptgt[i].pt.x);
-//      x = ((best_kptgt[i].pt.x - K.at<double>(0, 2))*z)/K.at<double>(0, 0);
-//      y = ((best_kptgt[i].pt.y - K.at<double>(1, 2))*z)/K.at<double>(1, 1);
-//      Pt << x, y, z;
-
-//      tts = Pt - Rrel*Ps;
-//      // Angulo em relacao a estimativa tida pela imagens
-//      float cos_theta = (tts.dot(trel))/(tts.norm()*trel.norm());
-//      float theta = RAD2DEG(acos(cos_theta));
-//      cout << theta << endl;
-//      // Se esta com um angulo pequeno, temos bom chute
-//      if(abs(theta) < 15.0 || abs(theta - 180.0) < 15.0)
-//        tts_vec.emplace_back(tts);
-//    }
-//  }
-
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::filtrar_ruidos_inpaint(MatrixXf &dt, MatrixXf &ds){
-  // Dimensao da janela pra olhar pela minima distancia - lado = 2l+1
-  const int l = 2, lado = 2*l + 1;
-
-  // Varrer em busca de falhas na imagem de distancia
-  MatrixXf tempt = dt, temps = ds;
-#pragma omp parallel for
-  for(int u=l; u<imrows - l; u++){
-    for(int v=l; v<imcols - l; v++){
-      if(dt(u, v) == 0){
-        MatrixXf mask(lado, lado);
-        mask = dt.block<lado,lado>(u-l, v-l);
-        tempt(u, v) = (mask.minCoeff() != 0) ? mask.minCoeff() : mask.maxCoeff();
-      }
-      if(ds(u, v) == 0){
-        MatrixXf mask(lado, lado);
-        mask = ds.block<lado,lado>(u-l, v-l);
-        temps(u, v) = (mask.minCoeff() != 0) ? mask.minCoeff() : mask.maxCoeff();
-      }
-    }
-  }
-  dt = tempt; ds = temps;
-
-  // Maiores distancias para corresponder a 255 e criar escala
-  float tma = dt.maxCoeff(), sma = ds.maxCoeff();
-
-  // Criar imagens em 1 canal 8 bits e mascaras de uma vez
-  Mat t8c(imrows, imcols, CV_8UC1)  , s8c(imrows, imcols, CV_8UC1)  ;
-#pragma omp parallel for
-  for(int u=0; u<imrows; u++){
-    for(int v=0; v<imcols; v++){
-      t8c.at<u_int8_t>(u, v) = int(255.0/tma*(dt(u, v)));
-      s8c.at<u_int8_t>(u, v) = int(255.0/sma*(ds(u, v)));
-    }
-  }
-
-  if(debug){
-    Mat debugt(imrows, imcols, CV_8UC3), debugs(imrows, imcols, CV_8UC3);
-    cvtColor(t8c, debugt, CV_GRAY2BGR);
-    cvtColor(s8c, debugs, CV_GRAY2BGR);
-    for(int i=0; i<best_kpsrc.size(); i++){
-      int r = rand()*255, b = rand()*255, g = rand()*255;
-      circle(debugt, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
-      circle(debugs, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
-    }
-    imshow("target", debugt);
-    imshow("source", debugs);
-    waitKey(0);
-  }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m){
@@ -612,11 +509,15 @@ void SFM::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref
     // Calcular os coeficientes angulares
     coefs[i] = (yn - yr)/(xn - xr);
   }
-  // Filtrar o vetor de matches na posicao que os coeficientes estejam fora por ngraus
   vector<DMatch> temp;
   for(int i=0; i<coefs.size(); i++){
-    if(abs(coefs[i]) < n)
-      temp.push_back(matches[i]);
+    // Se os matches estao na mesma regiao da foto
+    if( (kpref[matches[i].queryIdx].pt.x < width/2) && (kpnow[matches[i].trainIdx].pt.x < width/2) ||
+        (kpref[matches[i].queryIdx].pt.x > width/2) && (kpnow[matches[i].trainIdx].pt.x > width/2)){
+      // Filtrar o vetor de matches na posicao que os coeficientes estejam fora por ngraus
+      if(abs(coefs[i]) < n)
+        temp.push_back(matches[i]);
+    }
   }
   matches = temp;
 }

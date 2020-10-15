@@ -90,23 +90,17 @@ public:
   SFM(string p1, string p2);
   virtual ~SFM();
   void obter_dados(vector<string> linhas_src, vector<string> linhas_tgt);
-  void calcular_features_orb();
   void calcular_features_surf();
-  void orb_matches_matrix_encontrar_melhor();
   void surf_matches_matrix_encontrar_melhor();
   void calcular_pose_relativa();
   void set_debug(bool b);
   void obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, PointCloud<PointTN>::Ptr src);
-  void get_matched_keypoints(vector<Point2f> &kptgt, vector<Point2f> &kpsrc);
-  void get_indices_imagens(int &t, int &s);
-  void obter_correspondencias_3D_e_T();
   Matrix4f icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
 
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);
   void ler_nuvens_correspondentes();
   void estimar_escala_translacao();
-  void filtrar_ruidos_inpaint(MatrixXf &dt, MatrixXf &ds);
   void filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m);
 
   string pasta_src, pasta_tgt;
