@@ -138,7 +138,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
           // Filtrar keypoints repetidos
           this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
           // Filtrar por matches que nao sejam muito horizontais
-//          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(20));
+          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(30));
 
           // Anota quantas venceram nessa combinacao
           matches_count(i, j)        = good_matches.size();
@@ -201,14 +201,10 @@ void SFM::obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, P
   // Calcular rotacao relativa entre o frame src e tgt, src -> tgt
   // Conta necessaria: 2_R^1 = inv(in_R^2)*in_R^1
   R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
-  // Aplicar a rotacao relativa pela esquerda
-  R_src_tgt = Rrel * R_src_tgt;
 
   // Transformacao final (so rotacao)
-  T.block<3,3>(0, 0) = R_src_tgt;
+  T.block<3,3>(0, 0) = Rrel * R_src_tgt;
   // Transformacao final (em translacao)
-  trel << 0, 0, 1;
-  trel = Rrel*rots_tgt[im_tgt_indice].inverse()*trel;
   this->estimar_escala_translacao();
   T.block<3,1>(0, 3) = trel;
 
@@ -232,34 +228,6 @@ void SFM::ler_nuvens_correspondentes(){
   string nsrc = "acumulada.ply";
   loadPLYFile<PointTN>(pasta_tgt+ntgt, *cloud_tgt);
   loadPLYFile<PointTN>(pasta_src+nsrc, *cloud_src);
-
-//  if(debug)
-//    cout << "\nTirando FOV ..." << endl;
-//  float thresh = 80.0/2.0;
-//  PointIndices::Ptr indt (new PointIndices);
-//  float d;
-//  for(size_t i=0; i<cloud_tgt->size(); i++){
-//    Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
-//    p = rots_tgt[im_tgt_indice]*p;
-//    d = p.norm();
-//    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
-//      indt->indices.push_back(i);
-//  }
-//  ExtractIndices<PointTN> extract;
-//  extract.setIndices(indt);
-//  extract.setInputCloud(cloud_tgt);
-//  extract.filter(*cloud_tgt);
-//  PointIndices::Ptr inds (new PointIndices);
-//  for(size_t i=0; i<cloud_src->size(); i++){
-//    Vector3f p{(*cloud_src)[i].x, (*cloud_src)[i].y, (*cloud_src)[i].z};
-//    p = rots_src[im_src_indice]*p;
-//    d = p.norm();
-//    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
-//      inds->indices.push_back(i);
-//  }
-//  extract.setIndices(inds);
-//  extract.setInputCloud(cloud_src);
-//  extract.filter(*cloud_src);
 
   if(debug)
     cout << "\nPronto a leitura." << endl;
@@ -363,6 +331,13 @@ void SFM::estimar_escala_translacao(){
   float fx = K.at<double>(0, 0), fy = K.at<double>(1, 1), cx = K.at<double>(0, 2), cy = K.at<double>(1, 2);
   // Lista de pontos 3D correspondentes a partir de cada match
   vector<Vector3f> corresp_3d_src(best_kpsrc.size()), corresp_3d_tgt(best_kptgt.size());
+
+  PointCloud<PointTN>::Ptr temps (new PointCloud<PointTN>);
+  PointCloud<PointTN>::Ptr tempt (new PointCloud<PointTN>);
+  Quaternion<float> qs(rots_src[im_src_indice]);
+  Quaternion<float> qt(rots_tgt[im_tgt_indice]);
+  transformPointCloudWithNormals(*cloud_src, *temps, Vector3f::Zero(), qs);
+  transformPointCloudWithNormals(*cloud_tgt, *tempt, Vector3f::Zero(), qt);
   cout << "\nComecando a vasculhar os matches procurando por octree seus pontos na nuvem ..." << endl;
   // Para cada match
   for(int i=0; i<best_kpsrc.size(); i++){
@@ -372,26 +347,28 @@ void SFM::estimar_escala_translacao(){
     ut = best_kptgt[i].pt.x; vt = best_kptgt[i].pt.y;
     // Calcular a direcao no frame da camera para eles
     Vector3f dirs, dirt;
-    dirs << (us - cx)/(2.0*fx), -(vs - cy)/(2.0*fy), 1;
-    dirs = dirs/dirs.norm();
-    dirt << (ut - cx)/(2.0*fx), -(vt - cy)/(2.0*fy), 1;
-    dirt = dirt/dirt.norm();
+    dirs << (us - cx)/fx, -(vs - cy)/fy, 1;
+//    cout << dirs << endl << endl;
+    dirt << (ut - cx)/fx, -(vt - cy)/fy, 1;
     // Rotacionar o vetor para o frame local
-    dirs = rots_src[im_src_indice].transpose() * dirs;
-    dirt = rots_tgt[im_tgt_indice].transpose() * dirt;
+//    dirs = rots_src[im_src_indice].transpose() * dirs;
+//    dirt = rots_tgt[im_tgt_indice].transpose() * dirt;
     // Aplicar ray casting para saber em que parte da nuvem vai bater
-    octree::OctreePointCloudSearch<PointTN> oct(0.1);
+    octree::OctreePointCloudSearch<PointTN> oct(0.2);
     octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector aligns, alignt;
-    oct.setInputCloud(cloud_src);
-    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirs, aligns, 1);
+
+    oct.setInputCloud(temps);
+    oct.addPointsFromInputCloud();
+    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirs.normalized(), aligns, 1);
     // Se achou, adicionar na lista de pontos 3D naquele local
     if(aligns.size() > 0)
       corresp_3d_src[i] << aligns[0].x, aligns[0].y, aligns[0].z;
     else
       corresp_3d_src[i] << 0, 0, 0;
 
-    oct.setInputCloud(cloud_tgt);
-    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirt, alignt, 1);
+    oct.setInputCloud(tempt);
+    oct.addPointsFromInputCloud();
+    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirt.normalized(), alignt, 1);
     // Se achou, adicionar na lista de pontos 3D naquele local
     if(alignt.size() > 0)
       corresp_3d_tgt[i] << alignt[0].x, alignt[0].y, alignt[0].z;
@@ -405,11 +382,15 @@ void SFM::estimar_escala_translacao(){
     if(!(corresp_3d_src[i].norm() == 0) && !(corresp_3d_tgt[i].norm() == 0)){
       // Rotacionar ponto para o frame de src->tgt e obter translacao necessaria
       Vector3f t;
-      t = corresp_3d_tgt[i] - R_src_tgt*corresp_3d_src[i];
+      t = corresp_3d_tgt[i] - Rrel*corresp_3d_src[i];
       // Se direcao casa com a inicial proposta pelo match das imagens, ok
-      float theta = RAD2DEG( acos(t.dot(trel)/(t.norm()*trel.norm())) );
-      if(abs(theta < 15))
+      Vector3f Z{0, 0, 1}; // Eixos das imagens alinhados apos a rotacao src->tgt
+      float theta = RAD2DEG( acos(t.dot(Z)/(t.norm()*Z.norm())) );
+      cout << theta << endl;
+      if(abs(theta) < 15 || abs(theta - 180) < 15){
+        t = rots_tgt[im_tgt_indice].inverse()*t; // Levar para a orientacao original da tgt no espaco
         boas_translacoes.push_back(t);
+      }
     }
   }
   cout << "\nQuantos pontos foram bem  " << boas_translacoes.size() << endl;
@@ -420,8 +401,8 @@ void SFM::estimar_escala_translacao(){
   if(boas_translacoes.size() > 0) trel = acc/boas_translacoes.size(); else trel = 10*trel;
 
   if(debug){
-    for(int i=0; i<boas_translacoes.size(); i++)
-      cout << boas_translacoes[i] << endl;
+//    for(int i=0; i<boas_translacoes.size(); i++)
+//      cout << boas_translacoes[i] << endl;
     cout <<"\nT final: " << trel << endl;
   }
 
