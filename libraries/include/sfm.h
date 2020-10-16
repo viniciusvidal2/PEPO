@@ -73,6 +73,8 @@
 #include <csignal>
 #include <ctime>
 #include <math.h>
+#include <boost/accumulators/accumulators.hpp>
+#include <boost/accumulators/statistics.hpp>
 
 using namespace std;
 using namespace cv;
@@ -80,6 +82,7 @@ using namespace Eigen;
 using namespace pcl;
 using namespace pcl::io;
 using namespace pcl::registration;
+using namespace boost::accumulators;
 
 typedef PointXYZRGB       PointT ;
 typedef PointXYZRGBNormal PointTN;
@@ -94,8 +97,9 @@ public:
   void surf_matches_matrix_encontrar_melhor();
   void calcular_pose_relativa();
   void set_debug(bool b);
-  void obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, PointCloud<PointTN>::Ptr src);
-  Matrix4f icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
+  void obter_transformacao_final_sfm();
+  Matrix4f icp(float vs, int its);
+  void somar_spaces(Matrix4f T);
 
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);

@@ -1,7 +1,7 @@
 <launch>
 
-<arg name="pasta_tgt" default="quintal1"/>
-<arg name="pasta_src" default="quintal2"/>
+<arg name="pasta_tgt" default="gerador_tomada1"/>
+<arg name="pasta_src" default="gerador_tomada2"/>
 
 <node name="sfm_horizontal_node" pkg="fog" type="sfm_node" output="screen">
     <param name="pasta_tgt" value="$(arg pasta_tgt)"/>

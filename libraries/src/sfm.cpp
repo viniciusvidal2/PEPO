@@ -50,8 +50,8 @@ void SFM::obter_dados(vector<string> linhas_src, vector<string> linhas_tgt){
     foco << stof(splits[13]), stof(splits[14]);
     centro_otico << stof(splits[15]), stof(splits[16]);
   }
-  K.at<double>(0, 0) = 375; K.at<double>(1, 1) = 374;
-  K.at<double>(0, 2) = 245; K.at<double>(1, 2) = 142;
+  K.at<double>(0, 0) = foco(0); K.at<double>(1, 1) = foco(1);
+  K.at<double>(0, 2) = centro_otico(0); K.at<double>(1, 2) = centro_otico(1);
   K.at<double>(2, 2) = 1;
   for (auto s:linhas_src) {
     istringstream iss(s);
@@ -83,17 +83,21 @@ void SFM::calcular_features_surf(){
     // Ler a imagem inicial
     Mat imtgt = imread(imagens_tgt[i], IMREAD_COLOR);
     Mat imsrc = imread(imagens_src[i], IMREAD_COLOR);
-    resize(imtgt, imtgt, Size(imtgt.cols/4, imtgt.rows/4));
-    resize(imsrc, imsrc, Size(imsrc.cols/4, imsrc.rows/4));
+    //    resize(imtgt, imtgt, Size(imtgt.cols/4, imtgt.rows/4));
+    //    resize(imsrc, imsrc, Size(imsrc.cols/4, imsrc.rows/4));
 
     // Salvar aqui as dimensoes da imagem para a sequencia do algoritmo
     imcols = imtgt.cols; imrows = imtgt.rows;
 
+    //    Mat imtgtg, imsrcg;
+    //    cvtColor(imtgt, imtgtg, CV_BGR2GRAY);
+    //    cvtColor(imsrc, imsrcg, CV_BGR2GRAY);
+    //    cv::Ptr<AKAZE> akaze = AKAZE::create();
+    //    akaze->detectAndCompute(imtgtg, cv::noArray(), kptgt, dtgt);
+    //    akaze->detectAndCompute(imsrcg, cv::noArray(), kpsrc, dsrc);
+
+
     // Descritores SIFT calculados
-//    float min_hessian = 2000;
-//    Ptr<xfeatures2d::SURF> surf = xfeatures2d::SURF::create(min_hessian);
-//    surf->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
-//    surf->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
     Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
     sift->detectAndCompute(imtgt, Mat(), kptgt, dtgt);
     sift->detectAndCompute(imsrc, Mat(), kpsrc, dsrc);
@@ -136,10 +140,11 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
   // Matcher de FLANN
   cv::Ptr<DescriptorMatcher> matcher;
   matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
+  //  cv::BFMatcher matcher(NORM_TYPE_MASK);
 
   // Para cada combinacao de imagens, fazer match e salvar quantidade final para ver qual
   // a melhor depois
-#pragma omp parallel for
+  //#pragma omp parallel for
   for(int i=0; i<descp_tgt.size(); i++){
     for(int j=0; j<descp_src.size(); j++){
       vector<vector<DMatch>> matches;
@@ -148,7 +153,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
         matcher->knnMatch(descp_src[j], descp_tgt[i], matches, 2);
         for (size_t k = 0; k < matches.size(); k++){
           if (matches.at(k).size() >= 2){
-            if (matches.at(k).at(0).distance < 0.8*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
+            if (matches.at(k).at(0).distance < 0.7*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
               good_matches.push_back(matches.at(k).at(0));
           }
         }
@@ -156,7 +161,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
           // Filtrar keypoints repetidos
           this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
           // Filtrar por matches que nao sejam muito horizontais
-          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(10));
+          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(25));
 
           // Anota quantas venceram nessa combinacao
           matches_count(i, j)        = good_matches.size();
@@ -194,12 +199,12 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
   // Plotar imagens
   Mat im1 = imread(imagens_tgt[im_tgt_indice], IMREAD_COLOR);
   Mat im2 = imread(imagens_src[im_src_indice], IMREAD_COLOR);
-  resize(im1, im1, Size(im1.cols/4, im1.rows/4));
-  resize(im2, im2, Size(im2.cols/4, im2.rows/4));
+  //  resize(im1, im1, Size(im1.cols/4, im1.rows/4));
+  //  resize(im2, im2, Size(im2.cols/4, im2.rows/4));
   for(int i=0; i<best_kpsrc.size(); i++){
     int r = rand()%255, b = rand()%255, g = rand()%255;
-    circle(im1, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
-    circle(im2, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 3, Scalar(r, g, b), FILLED, LINE_8);
+    circle(im1, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
+    circle(im2, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
   }
   imshow("targetc", im1);
   imshow("sourcec", im2);
@@ -207,35 +212,6 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
 
   // Libera memoria
   kpts_tgt.clear(); kpts_src.clear();
-}
-/////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::obter_transformacao_final(Matrix4f &T, PointCloud<PointTN>::Ptr tgt, PointCloud<PointTN>::Ptr src){
-  // Lendo as nuvens correspondentes
-  this->ler_nuvens_correspondentes();
-
-  if(debug)
-    cout << "\nAplicando transformacao final ..." << endl;
-  // Calcular rotacao relativa entre o frame src e tgt, src -> tgt
-  // Conta necessaria: 2_R^1 = inv(in_R^2)*in_R^1
-  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
-
-  // Transformacao final (so rotacao)
-  T.block<3,3>(0, 0) = Rrel * R_src_tgt;
-  // Transformacao final (em translacao)
-  this->estimar_escala_translacao();
-  T.block<3,1>(0, 3) = trel;
-
-  // Transformar a nuvem source com a transformacao estimada
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, T);
-
-  if(debug){
-    // Salvar ambas as nuvens na pasta source pra comparar
-    savePLYFileBinary<PointTN>(pasta_src+"debug_tgt.ply", *cloud_tgt);
-    savePLYFileBinary<PointTN>(pasta_src+"debug_src.ply", *cloud_src);
-  }
-
-  *tgt = *cloud_tgt;
-  *src = *cloud_src;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::ler_nuvens_correspondentes(){
@@ -299,48 +275,33 @@ void SFM::calcular_pose_relativa(){
   cv2eigen(t, trel);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f SFM::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its){
-    Matrix4f Ticp = Matrix4f::Identity();
-    vs = vs/100.0;
+void SFM::obter_transformacao_final_sfm(){
+  // Lendo as nuvens correspondentes
+  this->ler_nuvens_correspondentes();
 
-    // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
-    PointCloud<PointTN>::Ptr tgttemp(new PointCloud<PointTN>);
-    PointCloud<PointTN>::Ptr srctemp(new PointCloud<PointTN>);
-    if(vs > 0){
-      VoxelGrid<PointTN> voxel;
-      voxel.setLeafSize(vs, vs, vs);
-      voxel.setInputCloud(ctgt);
-      voxel.filter(*tgttemp);
-      voxel.setInputCloud(csrc);
-      voxel.filter(*srctemp);
-    } else {
-      *tgttemp = *ctgt;
-      *srctemp = *csrc;
-    }
+  if(debug)
+    cout << "\nAplicando transformacao final ..." << endl;
+  // Calcular rotacao relativa entre o frame src e tgt, src -> tgt
+  // Conta necessaria: 2_R^1 = inv(in_R^2)*in_R^1
+  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
 
-    // Criando o otimizador de ICP comum
-    GeneralizedIterativeClosestPoint<PointTN, PointTN> icp;
-    //    IterativeClosestPoint<PointTN, PointTN> icp;
-    icp.setUseReciprocalCorrespondences(true);
-    icp.setInputTarget(tgttemp);
-    icp.setInputSource(srctemp);
-    //    icp.setRANSACIterations(30);
-    icp.setMaximumIterations(its); // Chute inicial bom 10-100
-    icp.setTransformationEpsilon(1*1e-8);
-    icp.setEuclideanFitnessEpsilon(1*1e-10);
-    icp.setMaxCorrespondenceDistance(vs*20);
-    // Alinhando
-    PointCloud<PointTN> dummy;
-    icp.align(dummy, Matrix4f::Identity());
-    // Obtendo a transformacao otimizada e aplicando
-    if(icp.hasConverged())
-        Ticp = icp.getFinalTransformation();
-    transformPointCloudWithNormals<PointTN>(*csrc, *csrc, Ticp);
+  // Transformacao final (so rotacao)
+  Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
+  // Transformacao final (em translacao)
+  this->estimar_escala_translacao();
+  Tsvd.block<3,1>(0, 3) = trel;
 
-    if(debug)
-      savePLYFileBinary<PointTN>(pasta_src+"src_final.ply", *csrc);
+  // Transformar a nuvem source com a transformacao estimada
+//  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd);
 
-    return Ticp;
+//  if(debug){
+//    // Salvar ambas as nuvens na pasta source pra comparar
+//    savePLYFileBinary<PointTN>(pasta_src+"debug_tgt.ply", *cloud_tgt);
+//    savePLYFileBinary<PointTN>(pasta_src+"debug_src.ply", *cloud_src);
+//  }
+
+//  *tgt = *cloud_tgt;
+//  *src = *cloud_src;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::estimar_escala_translacao(){
@@ -348,68 +309,133 @@ void SFM::estimar_escala_translacao(){
   float fx = K.at<double>(0, 0), fy = K.at<double>(1, 1), cx = K.at<double>(0, 2), cy = K.at<double>(1, 2);
   // Lista de pontos 3D correspondentes a partir de cada match
   vector<Vector3f> corresp_3d_src(best_kpsrc.size()), corresp_3d_tgt(best_kptgt.size());
+  PointCloud<PointT>::Ptr corresp_src (new PointCloud<PointT>);
+  PointCloud<PointT>::Ptr corresp_tgt (new PointCloud<PointT>);
 
-  PointCloud<PointTN>::Ptr temps (new PointCloud<PointTN>);
-  PointCloud<PointTN>::Ptr tempt (new PointCloud<PointTN>);
-  Quaternion<float> qs(rots_src[im_src_indice]);
-  Quaternion<float> qt(rots_tgt[im_tgt_indice]);
-  transformPointCloudWithNormals(*cloud_src, *temps, Vector3f::Zero(), qs);
-  transformPointCloudWithNormals(*cloud_tgt, *tempt, Vector3f::Zero(), qt);
   cout << "\nComecando a vasculhar os matches procurando por octree seus pontos na nuvem ..." << endl;
-  // Para cada match
+  octree::OctreePointCloudSearch<PointTN> octs(0.05);
+  octs.setInputCloud(cloud_src);
+  octs.addPointsFromInputCloud();
+  PointCloud<PointT>::Ptr foto (new PointCloud<PointT>);
+  // Para cada match na src
   for(int i=0; i<best_kpsrc.size(); i++){
     // Pegar o keypoint na imagem em questao
-    float us, vs, ut, vt;
+    float us, vs;
     us = best_kpsrc[i].pt.x; vs = best_kpsrc[i].pt.y;
-    ut = best_kptgt[i].pt.x; vt = best_kptgt[i].pt.y;
     // Calcular a direcao no frame da camera para eles
-    Vector3f dirs, dirt;
-    dirs << (us - cx)/fx, -(vs - cy)/fy, 1;
-//    cout << dirs << endl << endl;
-    dirt << (ut - cx)/fx, -(vt - cy)/fy, 1;
+    Vector3f dirs;
+    Vector3f Z{0, 0, 1};
+    dirs << (us - cx)/(fx), (vs - cy)/(fy), 1;
     // Rotacionar o vetor para o frame local
-//    dirs = rots_src[im_src_indice].transpose() * dirs;
-//    dirt = rots_tgt[im_tgt_indice].transpose() * dirt;
+    dirs = rots_src[im_src_indice].inverse() * dirs;
+    Z = rots_src[im_src_indice].inverse()*Z;
+    PointT pp;
+    pp.x = dirs(0); pp.y = dirs(1); pp.z = dirs(2);
+    pp.g = 0; pp.r = 255; pp.b = 0;
+    foto->push_back(pp);
+    pp.x = Z(0); pp.y = Z(1); pp.z = Z(2);
+    pp.g = 0; pp.r = 0; pp.b = 100;
+    foto->push_back(pp);
     // Aplicar ray casting para saber em que parte da nuvem vai bater
-    octree::OctreePointCloudSearch<PointTN> oct(0.2);
-    octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector aligns, alignt;
-
-    oct.setInputCloud(temps);
-    oct.addPointsFromInputCloud();
-    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirs.normalized(), aligns, 1);
+    octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector aligns;
+    octs.getIntersectedVoxelCenters(Vector3f::Zero(), dirs.normalized(), aligns, 1);
     // Se achou, adicionar na lista de pontos 3D naquele local
     if(aligns.size() > 0)
       corresp_3d_src[i] << aligns[0].x, aligns[0].y, aligns[0].z;
     else
       corresp_3d_src[i] << 0, 0, 0;
+  }
+  savePLYFileASCII(pasta_src+"foto_src.ply", *foto);
 
-    oct.setInputCloud(tempt);
-    oct.addPointsFromInputCloud();
-    oct.getIntersectedVoxelCenters(Vector3f::Zero(), dirt.normalized(), alignt, 1);
+  foto->clear();
+  octree::OctreePointCloudSearch<PointTN> octt(0.05);
+  octt.setInputCloud(cloud_tgt);
+  octt.addPointsFromInputCloud();
+  // Para cada match na tgt
+  for(int i=0; i<best_kptgt.size(); i++){
+    // Pegar o keypoint na imagem em questao
+    float ut, vt;
+    ut = best_kptgt[i].pt.x; vt = best_kptgt[i].pt.y;
+    // Calcular a direcao no frame da camera para eles
+    Vector3f dirt;
+    Vector3f Z{0, 0, 1};
+    cout << cx << "  " << ut << "  " << cy << "  " << vt << endl;
+    dirt << (ut - cx)/(fx), (vt - cy)/(fy), 1;
+    // Rotacionar o vetor para o frame local
+    dirt = rots_tgt[im_tgt_indice].inverse() * dirt;
+    Z = rots_tgt[im_tgt_indice].inverse() * Z;
+    PointT pp;
+    pp.x = dirt(0); pp.y = dirt(1); pp.z = dirt(2);
+    pp.g = 0; pp.r = 255; pp.b = 0;
+    foto->push_back(pp);
+    pp.x = Z(0); pp.y = Z(1); pp.z = Z(2);
+    pp.g = 0; pp.r = 0; pp.b = 100;
+    foto->push_back(pp);
+    // Aplicar ray casting para saber em que parte da nuvem vai bater
+    octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector alignt;
+    octt.getIntersectedVoxelCenters(Vector3f::Zero(), dirt.normalized(), alignt, 1);
     // Se achou, adicionar na lista de pontos 3D naquele local
     if(alignt.size() > 0)
       corresp_3d_tgt[i] << alignt[0].x, alignt[0].y, alignt[0].z;
     else
       corresp_3d_tgt[i] << 0, 0, 0;
   }
+  savePLYFileASCII(pasta_src+"foto_tgt.ply", *foto);
+
+  // NUVEM DE PONTOS DE TESTE DOS KEYPOINTS EM 3D NA TGT
+  PointCloud<PointT>::Ptr teste (new PointCloud<PointT>);
+  for(auto p:corresp_3d_tgt){
+    PointT pp;
+    pp.x = p(0); pp.y = p(1); pp.z = p(2);
+    pp.g = 255; pp.r = 0; pp.b = 0;
+    teste->push_back(pp);
+  }
+  savePLYFileASCII(pasta_src+"kpts_tgt.ply", *teste);
+  teste->clear();
+  for(auto p:corresp_3d_src){
+    PointT pp;
+    p = Rrel*R_src_tgt*p;
+    pp.x = p(0); pp.y = p(1); pp.z = p(2);
+    pp.g = 255; pp.r = 0; pp.b = 0;
+    teste->push_back(pp);
+  }
+  savePLYFileASCII(pasta_src+"kpts_src.ply", *teste);
 
   // Para cada ponto resultante do ray cast
-  vector<Vector3f> boas_translacoes;
+  vector<float> angulos;
+  vector<Vector3f> translacoes;
   for(int i=0; i < corresp_3d_src.size(); i++){
     if(!(corresp_3d_src[i].norm() == 0) && !(corresp_3d_tgt[i].norm() == 0)){
+      // Adicionar nas nuvens de correspondencias os pontos
+      PointT pp;
+      pp.x = corresp_3d_tgt[i](0); pp.y = corresp_3d_tgt[i](1); pp.z = corresp_3d_tgt[i](2);
+      corresp_tgt->push_back(pp);
+      pp.x = corresp_3d_src[i](0); pp.y = corresp_3d_src[i](1); pp.z = corresp_3d_src[i](2);
+      corresp_src->push_back(pp);
       // Rotacionar ponto para o frame de src->tgt e obter translacao necessaria
       Vector3f t;
-      t = corresp_3d_tgt[i] - Rrel*corresp_3d_src[i];
+      t = corresp_3d_tgt[i] - Rrel*R_src_tgt*corresp_3d_src[i];
       // Se direcao casa com a inicial proposta pelo match das imagens, ok
       Vector3f Z{0, 0, 1}; // Eixos das imagens alinhados apos a rotacao src->tgt
-      float theta = RAD2DEG( acos(t.dot(Z)/(t.norm()*Z.norm())) );
+      float theta = RAD2DEG( acos(t.dot(trel)/(t.norm()*trel.norm())) );
       cout << theta << endl;
-      if(abs(theta) < 15 || abs(theta - 180) < 15){
-        t = rots_tgt[im_tgt_indice].inverse()*t; // Levar para a orientacao original da tgt no espaco
-        boas_translacoes.push_back(t);
-      }
+      angulos.push_back(theta);
+      translacoes.push_back(t);
     }
   }
+//  // Inicia estimador
+//  registration::TransformationEstimationSVD<PointT, PointT> svd;
+//  svd.estimateRigidTransformation(*corresp_src, *corresp_tgt, Tsvd);
+
+  // Acha melhores translacoes segundo a media e desvio padrao das orientacoes
+  vector<Vector3f> boas_translacoes;
+  accumulator_set<double, stats<tag::variance> > a_acc;
+  for_each(angulos.begin(), angulos.end(), bind<void>(ref(a_acc), _1));
+  for(int i=0; i<translacoes.size(); i++){
+    if(abs(angulos[i] - extract::mean(a_acc)) < sqrt(extract::variance(a_acc)))
+      boas_translacoes.push_back(translacoes[i]);
+  }
+
   cout << "\nQuantos pontos foram bem  " << boas_translacoes.size() << endl;
   // Tira a media do somatorio dos vetores e atribui ao que antes era a translacao
   // so em escala, agora vai para o mundo real
@@ -418,8 +444,8 @@ void SFM::estimar_escala_translacao(){
   if(boas_translacoes.size() > 0) trel = acc/boas_translacoes.size(); else trel = 10*trel;
 
   if(debug){
-//    for(int i=0; i<boas_translacoes.size(); i++)
-//      cout << boas_translacoes[i] << endl;
+    for(int i=0; i<boas_translacoes.size(); i++)
+      cout << boas_translacoes[i].transpose() << endl << endl;
     cout <<"\nT final: " << trel << endl;
   }
 }
@@ -458,38 +484,38 @@ void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoi
     }
   }
   m = boas_matches;
-//  // Fazer o mesmo agora para as matches que sobraram e kpts da src
-//  // Itera sobre os matches pra colocar eles nos bins certos
-//  for(int i=0; i<boas_matches.size(); i++){
-//    KeyPoint kst = ks[m[i].queryIdx];
-//    int u = kst.pt.x/5, v = kst.pt.y/5;
-//    matriz_matches[u][v].push_back(m[i]);
-//  }
-//  // Vetor auxiliar de matches que vao passar no teste de melhor distancia
-//  vector<DMatch> otimas_matches;
-//  // Procurando na matriz de matches
-//  for(int i=0; i<w; i++){
-//    for(int j=0; j<h; j++){
-//      if(matriz_matches[i][j].size() > 0){
-//        // Se ha matches e for so uma, adicionar ela mesmo
-//        if(matriz_matches[i][j].size() == 1){
-//          otimas_matches.push_back(matriz_matches[i][j][0]);
-//        } else { // Se for mais de uma comparar a distancia com as outras
-//          DMatch mbest = matriz_matches[i][j][0];
-//          for(int k=1; k<matriz_matches[i][j].size(); k++){
-//            if(matriz_matches[i][j][k].distance < mbest.distance)
-//              mbest = matriz_matches[i][j][k];
-//          }
-//          // Adicionar ao vetor a melhor opcao para aquele bin
-//          otimas_matches.push_back(mbest);
-//        }
-//      }
-//      matriz_matches[i][j].clear(); // Ja podemos limpar aquele vetor, ja trabalhamos
-//    }
-//  }
+  //  // Fazer o mesmo agora para as matches que sobraram e kpts da src
+  //  // Itera sobre os matches pra colocar eles nos bins certos
+  //  for(int i=0; i<boas_matches.size(); i++){
+  //    KeyPoint kst = ks[m[i].queryIdx];
+  //    int u = kst.pt.x/5, v = kst.pt.y/5;
+  //    matriz_matches[u][v].push_back(m[i]);
+  //  }
+  //  // Vetor auxiliar de matches que vao passar no teste de melhor distancia
+  //  vector<DMatch> otimas_matches;
+  //  // Procurando na matriz de matches
+  //  for(int i=0; i<w; i++){
+  //    for(int j=0; j<h; j++){
+  //      if(matriz_matches[i][j].size() > 0){
+  //        // Se ha matches e for so uma, adicionar ela mesmo
+  //        if(matriz_matches[i][j].size() == 1){
+  //          otimas_matches.push_back(matriz_matches[i][j][0]);
+  //        } else { // Se for mais de uma comparar a distancia com as outras
+  //          DMatch mbest = matriz_matches[i][j][0];
+  //          for(int k=1; k<matriz_matches[i][j].size(); k++){
+  //            if(matriz_matches[i][j][k].distance < mbest.distance)
+  //              mbest = matriz_matches[i][j][k];
+  //          }
+  //          // Adicionar ao vetor a melhor opcao para aquele bin
+  //          otimas_matches.push_back(mbest);
+  //        }
+  //      }
+  //      matriz_matches[i][j].clear(); // Ja podemos limpar aquele vetor, ja trabalhamos
+  //    }
+  //  }
 
-//  // Retornando as matches que restaram
-//  m = otimas_matches;
+  //  // Retornando as matches que restaram
+  //  m = otimas_matches;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::set_debug(bool b){
@@ -512,13 +538,69 @@ void SFM::filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref
   vector<DMatch> temp;
   for(int i=0; i<coefs.size(); i++){
     // Se os matches estao na mesma regiao da foto
-    if( (kpref[matches[i].queryIdx].pt.x < width/2) && (kpnow[matches[i].trainIdx].pt.x < width/2) ||
-        (kpref[matches[i].queryIdx].pt.x > width/2) && (kpnow[matches[i].trainIdx].pt.x > width/2)){
+    if( (kpref[matches[i].queryIdx].pt.x < width/2 && kpnow[matches[i].trainIdx].pt.x < width/2) ||
+        (kpref[matches[i].queryIdx].pt.x > width/2 && kpnow[matches[i].trainIdx].pt.x > width/2)){
       // Filtrar o vetor de matches na posicao que os coeficientes estejam fora por ngraus
       if(abs(coefs[i]) < n)
         temp.push_back(matches[i]);
     }
   }
   matches = temp;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+Matrix4f SFM::icp(float vs, int its){
+  // Ler nuvens correspondentes pelas imagens
+  PointCloud<PointTN>::Ptr csrc (new PointCloud<PointTN>);
+  PointCloud<PointTN>::Ptr ctgt (new PointCloud<PointTN>);
+  loadPLYFile<PointTN>(pasta_src+nomes_nuvens[im_src_indice], *csrc);
+  loadPLYFile<PointTN>(pasta_tgt+nomes_nuvens[im_tgt_indice], *ctgt);
+
+  Matrix4f Ticp = Tsvd;
+  vs = vs/100.0;
+
+  // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
+  PointCloud<PointTN>::Ptr tgttemp(new PointCloud<PointTN>);
+  PointCloud<PointTN>::Ptr srctemp(new PointCloud<PointTN>);
+  if(vs > 0){
+    VoxelGrid<PointTN> voxel;
+    voxel.setLeafSize(vs, vs, vs);
+    voxel.setInputCloud(ctgt);
+    voxel.filter(*tgttemp);
+    voxel.setInputCloud(csrc);
+    voxel.filter(*srctemp);
+  } else {
+    *tgttemp = *ctgt;
+    *srctemp = *csrc;
+  }
+
+  // Criando o otimizador de ICP comum
+//  GeneralizedIterativeClosestPoint<PointTN, PointTN> icp;
+  IterativeClosestPoint<PointTN, PointTN> icp;
+  icp.setUseReciprocalCorrespondences(true);
+  icp.setInputTarget(tgttemp);
+  icp.setInputSource(srctemp);
+  //    icp.setRANSACIterations(30);
+  icp.setMaximumIterations(its); // Chute inicial bom 10-100
+  icp.setTransformationEpsilon(1*1e-9);
+  icp.setEuclideanFitnessEpsilon(1*1e-12);
+  icp.setMaxCorrespondenceDistance(0.1);
+  // Alinhando
+  PointCloud<PointTN> dummy;
+  icp.align(dummy, Tsvd);
+  // Obtendo a transformacao otimizada e aplicando
+  if(icp.hasConverged()){
+    Ticp = icp.getFinalTransformation();
+    cout << "\nICP convergiu !!!" << endl;
+  }
+  transformPointCloudWithNormals<PointTN>(*csrc, *csrc, Ticp);
+
+  savePLYFileBinary<PointTN>(pasta_src+"src_final.ply", *csrc);
+  savePLYFileBinary<PointTN>(pasta_src+"tgt_final.ply", *ctgt);
+
+  return Ticp;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void SFM::somar_spaces(Matrix4f T){
+
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

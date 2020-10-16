@@ -26,7 +26,7 @@ int main(int argc, char **argv)
   /// Classe de trabalho de SfM e de registro
   ///
   SFM sfm(pasta_src, pasta_tgt);
-  sfm.set_debug(true);
+  sfm.set_debug(false);
 
   /// Iniciar leitura das imagens da vista anterior e da atual
   ///
@@ -80,16 +80,15 @@ int main(int argc, char **argv)
   /// Transformar o frames das duas nuvens com a transformacao relativa
   ///
   ROS_INFO("Pose da transformacao final ...");
-  Matrix4f T = Matrix4f::Identity();
-  PointCloud<PointTN>::Ptr tgt (new PointCloud<PointTN>);
-  PointCloud<PointTN>::Ptr src (new PointCloud<PointTN>);
-  sfm.obter_transformacao_final(T, tgt, src);
+  sfm.obter_transformacao_final_sfm();
 
   /// Transformacao estimada entre as nuvens
   ///
+  ROS_INFO("Fechando com ICP ...");
   ros::Time tempo = ros::Time::now();
-  Matrix4f Ticp = sfm.icp(tgt, src, 3, 30);
-  ROS_WARN("Tempo para o icp: %.2f segundos.", (ros::Time::now() - tempo).toSec());
+  Matrix4f Ticp = sfm.icp(5.0, 100);
+  sfm.somar_spaces(Ticp);
+  ROS_WARN("Tempo para o ICP e soma das nuvens: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 
   ROS_INFO("Processo terminado.");
   ros::spinOnce();

@@ -584,9 +584,9 @@ std::string ProcessCloud::escreve_linha_sfm(string nome, Matrix3f r, Vector3f t)
   // Adicionar vetor de translacao
   linha = linha + " " + std::to_string(t(0)) + " " + std::to_string(t(1)) + " " + std::to_string(t(2));
   // Adicionar foco x e y como na matriz da camera em resolucao HD
-  linha = linha + " " + std::to_string(K2(0, 0)) + " " + std::to_string(K2(1, 1));
+  linha = linha + " " + std::to_string(K1(0, 0)) + " " + std::to_string(K1(1, 1));
   // Adicionar centro optico em x e y como na matriz da camera em resolucao HD
-  linha = linha + " " + std::to_string(K2(0, 2)) + " " + std::to_string(K2(1, 2));
+  linha = linha + " " + std::to_string(K1(0, 2)) + " " + std::to_string(K1(1, 2));
   // Adicionando quebra de linha - padrao do MART
   linha = linha + "\n";
   // Muda as virgulas por pontos no arquivo, caso existam
