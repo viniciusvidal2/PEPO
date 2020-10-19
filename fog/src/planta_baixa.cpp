@@ -68,7 +68,7 @@ int main(int argc, char **argv)
   // Lendo a nuvem acumulada
   ROS_INFO("Carregando nuvem acumulada do space ...");
   PointCloud<PointT>::Ptr nuvem_inicial (new PointCloud<PointT>);
-  loadPLYFile<PointT>(pasta+"pf_002.ply", *nuvem_inicial);
+  loadPLYFile<PointT>(pasta+"acumulada.ply", *nuvem_inicial);
   ROS_INFO("Nuvem carregada com %zu pontos.", nuvem_inicial->size());
 
   // Inicia a classe de nuvem de pontos

@@ -1,6 +1,6 @@
 <launch>
 
-<arg name="pasta"     default="Scanner_obj"/>
+<arg name="pasta"     default="quintal2"/>
 <arg name="resolucao" default="0.04"           />
 <arg name="lado_area" default="20"             />
 
