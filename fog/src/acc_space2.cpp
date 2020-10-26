@@ -350,7 +350,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
         nome_imagem = "imagem_0" +std::to_string(i+1)+".png";
       else
         nome_imagem = "imagem_"  +std::to_string(i+1)+".png";
-      linhas_sfm.push_back(pc->escreve_linha_sfm(nome_imagem, Rcam, tcam));
+      linhas_sfm.push_back(pc->escreve_linha_sfm(nome_imagem, Rcam, Vector3f::Zero()));
     }
     ROS_INFO("Salvando nuvem acumulada final ...");
     pc->saveCloud(acc, "acumulada");

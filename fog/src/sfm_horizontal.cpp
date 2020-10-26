@@ -26,7 +26,7 @@ int main(int argc, char **argv)
   /// Classe de trabalho de SfM e de registro
   ///
   SFM sfm(pasta_src, pasta_tgt);
-  sfm.set_debug(false);
+  sfm.set_debug(true);
 
   /// Iniciar leitura das imagens da vista anterior e da atual
   ///

@@ -11,4 +11,15 @@
     <param name="fp"    value="$(arg filter_poli)"/>
 </node>
 
+<node name="acc_space_node1" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="cloud_space1"/>
+    <remap from="/angle_space" to="angle_space1"/>
+    <param name="pasta" value="$(arg pasta)1"     />
+    <param name="vs"    value="$(arg voxel_size)" />
+    <param name="df"    value="$(arg depth)"      />
+    <param name="fp"    value="$(arg filter_poli)"/>
+</node>
+
+<include file="$(find fog)/launch/record_fog.launch"/>
+
 </launch>

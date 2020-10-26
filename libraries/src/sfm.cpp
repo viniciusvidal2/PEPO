@@ -194,8 +194,10 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
       circle(im1, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
       circle(im2, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
     }
-    imshow("targetc", im1);
-    imshow("sourcec", im2);
+//    imshow("targetc", im1);
+//    imshow("sourcec", im2);
+    imwrite(pasta_src+"im_tgt.png", im1);
+    imwrite(pasta_src+"im_src.png", im2);
     waitKey();
   }
 
@@ -299,7 +301,7 @@ void SFM::estimar_escala_translacao(){
   PointCloud<PointT>::Ptr corresp_tgt (new PointCloud<PointT>);
 
   cout << "\nComecando a vasculhar os matches procurando por octree seus pontos na nuvem ..." << endl;
-  octree::OctreePointCloudSearch<PointTN> octs(0.05);
+  octree::OctreePointCloudSearch<PointTN> octs(0.02);
   octs.setInputCloud(cloud_src);
   octs.addPointsFromInputCloud();
   // Para cada match na src
@@ -322,7 +324,7 @@ void SFM::estimar_escala_translacao(){
       corresp_3d_src[i] << 0, 0, 0;
   }
 
-  octree::OctreePointCloudSearch<PointTN> octt(0.05);
+  octree::OctreePointCloudSearch<PointTN> octt(0.02);
   octt.setInputCloud(cloud_tgt);
   octt.addPointsFromInputCloud();
   // Para cada match na tgt
@@ -344,6 +346,17 @@ void SFM::estimar_escala_translacao(){
     else
       corresp_3d_tgt[i] << 0, 0, 0;
   }
+
+  // NUVEM DE PONTOS DE TESTE DOS KEYPOINTS EM 3D NA TGT
+  PointCloud<PointT>::Ptr teste (new PointCloud<PointT>);
+  for(auto p:corresp_3d_tgt){
+    PointT pp;
+    pp.x = p(0); pp.y = p(1); pp.z = p(2);
+    pp.g = 255; pp.r = 0; pp.b = 0;
+    teste->push_back(pp);
+  }
+  savePLYFileBinary(pasta_src+"kpts_tgt.ply", *teste);
+  teste->clear();
 
   // Para cada ponto resultante do ray cast
   vector<float> angulos;
@@ -380,6 +393,16 @@ void SFM::estimar_escala_translacao(){
   Vector3f acc;
   for(auto t:boas_translacoes) acc += t;
   if(boas_translacoes.size() > 0) trel = acc/boas_translacoes.size(); else trel = 10*trel;
+
+  for(auto p:corresp_3d_src){
+    PointT pp;
+    p = Tsvd.block<3,3>(0, 0)*p + trel;
+    pp.x = p(0); pp.y = p(1); pp.z = p(2);
+    pp.g = 255; pp.r = 0; pp.b = 255;
+    teste->push_back(pp);
+  }
+  savePLYFileBinary(pasta_src+"kpts_src.ply", *teste);
+  teste->clear();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m){
@@ -506,7 +529,8 @@ Matrix4f SFM::icp(float vs, int its){
 
   Matrix4f Ticp = Matrix4f::Identity();
   vs = vs/100.0;
-
+  if(debug)
+    cout << "\nPerformando ICP ..." << endl;
   // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
   PointCloud<PointTN>::Ptr tgttemp(new PointCloud<PointTN>);
   PointCloud<PointTN>::Ptr srctemp(new PointCloud<PointTN>);
