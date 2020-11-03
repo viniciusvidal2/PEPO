@@ -48,3 +48,8 @@ add_executable(sfm_node src/sfm_horizontal.cpp ../libraries/src/sfm.cpp)
 target_compile_options(sfm_node PRIVATE ${OpenMP_FLAGS})
 add_dependencies(sfm_node ${catkin_EXPORTED_TARGETS})
 target_link_libraries(sfm_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
+
+add_executable(imagem_virtual src/imagem_virtual.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
+target_compile_options(imagem_virtual PRIVATE ${OpenMP_FLAGS})
+add_dependencies(imagem_virtual ${catkin_EXPORTED_TARGETS})
+target_link_libraries(imagem_virtual ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})

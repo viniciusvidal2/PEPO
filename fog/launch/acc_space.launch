@@ -3,6 +3,7 @@
 <arg name="voxel_size" default="2"/>
 <arg name="depth" default="20"/>
 <arg name="filter_poli" default="0"/>
+<param name="/use_sim_time" value="true"/>
 
 <node name="acc_space_node" pkg="fog" type="acc_space_node" output="screen">
     <param name="pasta" value="$(arg pasta)"      />
@@ -11,15 +12,61 @@
     <param name="fp"    value="$(arg filter_poli)"/>
 </node>
 
-<node name="acc_space_node1" pkg="fog" type="acc_space_node" output="screen">
-    <remap from="/cloud_space" to="cloud_space1"/>
-    <remap from="/angle_space" to="angle_space1"/>
+<!--<node name="acc_space_node1" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="/cloud_space1"/>
+    <remap from="/angle_space" to="/angle_space1"/>
+    <remap from="/cloud_user"  to="/cloud_user1" />
+    <remap from="/vista_space" to="/vista_space1"/>
     <param name="pasta" value="$(arg pasta)1"     />
     <param name="vs"    value="$(arg voxel_size)" />
     <param name="df"    value="$(arg depth)"      />
     <param name="fp"    value="$(arg filter_poli)"/>
 </node>
 
-<include file="$(find fog)/launch/record_fog.launch"/>
+<node name="acc_space_node2" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="/cloud_space2"/>
+    <remap from="/angle_space" to="/angle_space2"/>
+    <remap from="/cloud_user"  to="/cloud_user2" />
+    <remap from="/vista_space" to="/vista_space2"/>
+    <param name="pasta" value="$(arg pasta)2"     />
+    <param name="vs"    value="$(arg voxel_size)" />
+    <param name="df"    value="$(arg depth)"      />
+    <param name="fp"    value="$(arg filter_poli)"/>
+</node>
+
+<node name="acc_space_node3" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="/cloud_space3"/>
+    <remap from="/angle_space" to="/angle_space3"/>
+    <remap from="/cloud_user"  to="/cloud_user3" />
+    <remap from="/vista_space" to="/vista_space3"/>
+    <param name="pasta" value="$(arg pasta)3"     />
+    <param name="vs"    value="$(arg voxel_size)" />
+    <param name="df"    value="$(arg depth)"      />
+    <param name="fp"    value="$(arg filter_poli)"/>
+</node>
+
+<node name="acc_space_node4" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="/cloud_space4"/>
+    <remap from="/angle_space" to="/angle_space4"/>
+    <remap from="/cloud_user"  to="/cloud_user4" />
+    <remap from="/vista_space" to="/vista_space4"/>
+    <param name="pasta" value="$(arg pasta)4"     />
+    <param name="vs"    value="$(arg voxel_size)" />
+    <param name="df"    value="$(arg depth)"      />
+    <param name="fp"    value="$(arg filter_poli)"/>
+</node>
+
+<node name="acc_space_node5" pkg="fog" type="acc_space_node" output="screen">
+    <remap from="/cloud_space" to="/cloud_space5"/>
+    <remap from="/angle_space" to="/angle_space5"/>
+    <remap from="/cloud_user"  to="/cloud_user5" />
+    <remap from="/vista_space" to="/vista_space5"/>
+    <param name="pasta" value="$(arg pasta)5"     />
+    <param name="vs"    value="$(arg voxel_size)" />
+    <param name="df"    value="$(arg depth)"      />
+    <param name="fp"    value="$(arg filter_poli)"/>
+</node>-->
+
+<!--<include file="$(find fog)/launch/record_fog.launch"/>-->
 
 </launch>

@@ -74,9 +74,19 @@ int deg2raw(float deg, string motor){
 }
 float raw2deg(int raw, string motor){
   if(motor == "pan")
-    return float(raw*deg_raw_pan);// (float(raw) - raw_min_pan )*deg_raw_pan  + deg_min_pan;
+    return float(raw)*deg_raw_pan;// (float(raw) - raw_min_pan )*deg_raw_pan  + deg_min_pan;
   else
     return (float(raw) - raw_max_tilt)*deg_raw_tilt + deg_max_tilt;
+}
+string create_folder(string p){
+    struct stat buffer;
+    for(int i=1; i<200; i++){ // Tentar criar ate 200 pastas - impossivel
+        string nome_atual = p + std::to_string(i);
+        if(stat(nome_atual.c_str(), &buffer)){ // Se nao existe a pasta
+            mkdir(nome_atual.c_str(), 0777);
+            return nome_atual;
+        }
+    }
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
 void saveTempJuliano(PointCloud<PointTN>::Ptr cloud, int n, float p, float t){
@@ -198,6 +208,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
 
   // Tempo de transito da mensagem na rede
   ros::Time tempo = ros::Time::now();
+//  cout << "\nTEMPO AGORA: " << tempo << "   TEMPO DA MENSAGEM: " << msg_cloud->header.stamp << endl << endl;
   tempos_transito_msg.push_back((tempo - msg_cloud->header.stamp).toSec());
   tempo = ros::Time::now();
 
@@ -271,7 +282,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
       if(abs(cont_aquisicao - msg_angle->pose.pose.orientation.w) > ntilts)
         roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 130.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
       else // Se for, comparar com a acumulada pra nao repetir pontos do inicio tambem
-        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos,  30.0);
+        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos,  90.0);
 
       pontos_kdtree.push_back(parcial_pontos_novos->size());
 
@@ -297,14 +308,14 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
     tempos_vizinhos_lastview.push_back((ros::Time::now() - tempo).toSec());
 
     // Salvar nuvem parcia somente considerando os pontos novos
-    ROS_INFO("Salvando nuvem de pontos %d ...", cont_aquisicao);
-    if(cont_aquisicao < 10){
-      pc->saveCloud(parcial_pontos_novos, "pf_00"+std::to_string(cont_aquisicao));
-    } else if(cont_aquisicao < 100) {
-      pc->saveCloud(parcial_pontos_novos, "pf_0" +std::to_string(cont_aquisicao));
-    } else {
-      pc->saveCloud(parcial_pontos_novos, "pf_"  +std::to_string(cont_aquisicao));
-    }
+//    ROS_INFO("Salvando nuvem de pontos %d ...", cont_aquisicao);
+//    if(cont_aquisicao < 10){
+//      pc->saveCloud(parcial_pontos_novos, "pf_00"+std::to_string(cont_aquisicao));
+//    } else if(cont_aquisicao < 100) {
+//      pc->saveCloud(parcial_pontos_novos, "pf_0" +std::to_string(cont_aquisicao));
+//    } else {
+//      pc->saveCloud(parcial_pontos_novos, "pf_"  +std::to_string(cont_aquisicao));
+//    }
     // Limpa a parcial atual vista em PAN
     parcial->clear();
     // Reseta o contador de nuvens
@@ -378,6 +389,19 @@ int main(int argc, char **argv)
   pcl::console::setVerbosityLevel(pcl::console::L_ALWAYS);
   ROS_INFO("Iniciando o processo em FOG de registro de nuvens ...");
 
+  int a=0;
+  ros::Time tem;
+  vector<uint64_t> temps(500);
+  for(int k=0; k<500; k++){
+    tem = ros::Time::now();
+    for(int i=0; i<10; i++)
+      a = 10+10;
+    temps[k] = (ros::Time::now() - tem).toNSec();
+  }
+  float avg = float(accumulate(temps.begin(), temps.end(), 0))/float(temps.size());
+  ROS_WARN("TEMPO PU DA FOG: %.2f", avg);
+  cout << endl << endl << endl;
+
   // Pegando o nome da pasta por parametro
   string nome_param;
   n_.param<string>("pasta", nome_param , string("Dados_PEPO"));
@@ -388,9 +412,17 @@ int main(int argc, char **argv)
   // Apagando pasta atual e recriando a mesma na area de trabalho
   char* home;
   home = getenv("HOME");
-  pasta = string(home)+"/Desktop/"+nome_param.c_str()+"/";
-  int retorno = system(("rm -r "+pasta).c_str());
-  mkdir(pasta.c_str(), 0777);
+  // Checando se ha a pasta spaces, senao criar
+  pasta = string(home)+"/Desktop/spaces/";
+  struct stat buffer;
+  if(stat(pasta.c_str(), &buffer)) // Se nao existe a pasta
+      mkdir(pasta.c_str(), 0777);
+  // Criando pasta mae
+  pasta = pasta + nome_param.c_str();
+  if(stat(pasta.c_str(), &buffer)) // Se nao existe a pasta
+      mkdir(pasta.c_str(), 0777);
+  // Criando pastas filhas
+  pasta = create_folder(pasta + "/scan") + "/";
 
   // Inicia classe de processo de nuvens
   pc  = new ProcessCloud(pasta);
