@@ -11,9 +11,8 @@ RegisterObjectOptm::~RegisterObjectOptm(){
     ros::waitForShutdown();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointTN>::Ptr cloud){
+void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointT>::Ptr cin){
     // Le a nuvem
-    PointCloud<PointT>::Ptr cin (new PointCloud<PointT>);
     loadPLYFile<PointT>(name, *cin);
     // Retirando indices NaN se existirem
     vector<int> indicesNaN;
@@ -25,7 +24,7 @@ void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointTN>
     // Filtro de profundidade para nao pegarmos muito fundo
     PassThrough<PointT> pass;
     pass.setFilterFieldName("z");
-    pass.setFilterLimits(0, 7); // Z metros de profundidade
+    pass.setFilterLimits(0, 10); // Z metros de profundidade
     // Filtro de ruidos aleatorios
     StatisticalOutlierRemoval<PointT> sor;
     sor.setMeanK(10);
@@ -39,7 +38,7 @@ void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointTN>
     pass.setInputCloud(cin);
     pass.filter(*cin);
     sor.setInputCloud(cin);
-    sor.filter(*cin);
+//    sor.filter(*cin);
 //    // Passando polinomio pra suavizar a parada
 //    pcl::search::KdTree<PointT>::Ptr tree (new pcl::search::KdTree<PointT>());
 //    MovingLeastSquares<PointT, PointTN> mls;
@@ -49,12 +48,6 @@ void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointTN>
 //    mls.setSearchMethod(tree);
 //    mls.setSearchRadius(0.05);
 //    mls.process(*cloud);
-    cloud->resize(cin->size());
-#pragma omp parallel for
-    for(size_t i=0; i<cin->size(); i++){
-        cloud->points[i].x = cin->points[i].x; cloud->points[i].y = cin->points[i].y; cloud->points[i].z = cin->points[i].z;
-        cloud->points[i].r = cin->points[i].r; cloud->points[i].g = cin->points[i].g; cloud->points[i].b = cin->points[i].b;
-    }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void RegisterObjectOptm::projectCloudAndAnotatePixels(PointCloud<PointTN>::Ptr cloud, Mat im, PointCloud<PointTN>::Ptr cloud_pix, float f, Vector3f t, MatrixXi &impix){
@@ -149,170 +142,133 @@ Matrix4f RegisterObjectOptm::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<Point
     return Ticp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, int npontos3d, vector<Point2d> &matches3d,
-                                                      MatrixXi refpix, MatrixXi nowpix, int l){
+void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow,
+                                                      PointCloud<PointTN>::Ptr cmr, PointCloud<PointTN>::Ptr cmn){
     /// Calculando descritores SIFT ///
     // Keypoints e descritores para astra e zed
     vector<KeyPoint> kpref, kpnow;
-    vector<Point2f> imrefpts, imnowpts, goodimrefpts, goodimnowpts;
     Mat dref, dnow;
     /// Comparando e filtrando matchs ///
     cv::Ptr<DescriptorMatcher> matcher;
     matcher = DescriptorMatcher::create(DescriptorMatcher::FLANNBASED);
     vector<vector< DMatch > > matches;
-//    Ptr<DescriptorMatcher> matcher = DescriptorMatcher::create("BruteForce-Hamming");
-//    vector<DMatch> matches;
     vector<DMatch> good_matches;
 
-    int tent = 0; // tentativas maximas de achar npontos3d correspondencias bacanas
-    float min_hessian = 1800, maxfeat = 80;
+    // Descritores SIFT calculados
+    Ptr<xfeatures2d::SIFT> sift = xfeatures2d::SIFT::create();
+    sift->detectAndCompute(imref, Mat(), kpref, dref);
+    sift->detectAndCompute(imnow, Mat(), kpnow, dnow);
+    // Calculando somatorio para cada linha de descritores
+    Mat drefsum, dnowsum;
+    reduce(dref, drefsum, 1, CV_16UC1);
+    reduce(dnow, dnowsum, 1, CV_16UC1);
+    // Normalizando e passando raiz em cada elementos de linha nos descritores da src
+#pragma omp parallel for
+    for(int i=0; i<dnow.rows; i++){
+      for(int j=0; j<dnow.cols; j++){
+        dnow.at<float>(i, j) = sqrt(dnow.at<float>(i, j) / (dnowsum.at<float>(i, 0) + numeric_limits<float>::epsilon()));
+      }
+    }
+    // Normalizando e passando raiz em cada elementos de linha nos descritores da tgt
+#pragma omp parallel for
+    for(int i=0; i<dref.rows; i++){
+      for(int j=0; j<dref.cols; j++){
+        dref.at<float>(i, j) = sqrt(dref.at<float>(i, j) / (drefsum.at<float>(i, 0) + numeric_limits<float>::epsilon()));
+      }
+    }
 
-    /// Loop de busca por matches e pontos 3D correspondentes ///
-    while(tent < 10 && matches3d.size() <= npontos3d){
-        // Resetando vetores do algoritmo para buscarem novamente
-        matches.clear(); good_matches.clear(); matches3d.clear();
-        goodimnowpts.clear(); goodimrefpts.clear();
-        imnowpts.clear(); imrefpts.clear();
-        // Calculando features e realizando match
-        Ptr<xfeatures2d::SURF> f2d = xfeatures2d::SURF::create(min_hessian);
-        f2d->detectAndCompute(imref, Mat(), kpref, dref);
-        f2d->detectAndCompute(imnow, Mat(), kpnow, dnow);
-        matcher->knnMatch(dref, dnow, matches, 2);
+    matcher->knnMatch(dnow, dref, matches, 2);
+    for (size_t k = 0; k < matches.size(); k++){
+      if (matches.at(k).size() >= 2){
+        if (matches.at(k).at(0).distance < 0.8*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
+          good_matches.push_back(matches.at(k).at(0));
+      }
+    }
 
-//        Mat imrefGray, imnowGray;
-//        cvtColor(imref, imrefGray, CV_BGR2GRAY);
-//        cvtColor(imnow, imnowGray, CV_BGR2GRAY);
+    for(int i=0; i<good_matches.size(); i++){
+      int r = rand()%255, b = rand()%255, g = rand()%255;
+      circle(imref, Point(kpref[good_matches[i].trainIdx].pt.x, kpref[good_matches[i].trainIdx].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
+      circle(imnow, Point(kpnow[good_matches[i].queryIdx].pt.x, kpnow[good_matches[i].queryIdx].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
+    }
+    imshow("targetc", imref);
+    imshow("sourcec", imnow);
+    waitKey(0);
 
-//        // Detect ORB features and compute descriptors.
-//        Ptr<ORB> orb = ORB::create(maxfeat);
-//        orb->detectAndCompute(imrefGray, Mat(), kpref, dref);
-//        orb->detectAndCompute(imnowGray, Mat(), kpnow, dnow);
+    // Dados intrinsecos da camera
+    float fx = 1130.000000, fy = 1130.000000, cx = 1920.0/2, cy = 1080.0/2;
 
-        // Match features.
-//        matcher->match(dref, dnow, matches, Mat());
-
-        // Sort matches by score
-//        std::sort(matches.begin(), matches.end());
-
-        // Remove not so good matches
-//        const int numGoodMatches = matches.size() * 0.9f;
-//        matches.erase(matches.begin()+numGoodMatches, matches.end());
-//        good_matches = matches;
-
-        for (size_t i = 0; i < matches.size(); i++){
-            if (matches.at(i).size() >= 2){
-                if (matches.at(i).at(0).distance < 0.8*matches.at(i).at(1).distance){ // Se e bastante unica frente a segunda colocada
-                    float dref, dnow; // Distancias dos pontos aos centros das imagens
-                    Point2f pref, pnow;
-                    pref = kpref[matches.at(i).at(0).queryIdx].pt; pnow = kpnow[matches.at(i).at(0).trainIdx].pt;
-                    dref = sqrt( pow(pref.x - imref.cols/2, 2) + pow(pref.y - imref.rows, 2) );
-                    dnow = sqrt( pow(pnow.x - imnow.cols/2, 2) + pow(pnow.y - imnow.rows, 2) );
-                    if(dref < 0.8*imref.rows/2 && dnow < 0.8*imnow.rows/2) // Se esta localizada mais ao centro da imagem
-                        good_matches.push_back(matches.at(i).at(0));
-                }
-            }
+    // Se houveram matches suficientes
+    if(good_matches.size() > 6){
+      // Aloca espaco para nuvens de saida de match 3D
+      cmr->resize(good_matches.size()); cmn->resize(good_matches.size());
+      // Calcular pontos 3D de cada match em now
+      vector<int> istherepoint_now(good_matches.size());
+      octree::OctreePointCloudSearch<PointTN> oct(0.02);
+      oct.setInputCloud(cnow);
+      oct.addPointsFromInputCloud();
+#pragma omp parallel for
+      for(int i=0; i<good_matches.size(); i++){
+        float u = kpnow[good_matches[i].queryIdx].pt.x, v = kpnow[good_matches[i].queryIdx].pt.y;
+        Vector3f dir;
+        dir << (u - cx)/fx, (v - cy)/fy, 1;
+        octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector align;
+        oct.getIntersectedVoxelCenters(Vector3f::Zero(), dir.normalized(), align, 1);
+        // Se achou, adicionar na lista de pontos 3D naquele local
+        if(align.size() > 0){
+          vector<int> ind;
+          vector<float> dists;
+          oct.nearestKSearch(align[0], 1, ind, dists);
+          if(ind.size() > 0){
+            istherepoint_now[i] = 1;
+            cmn->points[i] = cnow->points[ind[0]];
+          } else {
+            istherepoint_now[i] = 0;
+          }
+        } else {
+          istherepoint_now[i] = 0;
         }
+      }
 
-
-        // Filtrando por distancia media entre os matches
-        vector<float> distances (good_matches.size());
-        for (int i=0; i < good_matches.size(); i++)
-            distances[i] = good_matches[i].distance;
-        float average = accumulate(distances.begin(), distances.end(), 0.0) / distances.size();
-        for(vector<DMatch>::iterator it = good_matches.begin(); it!=good_matches.end();){
-            if(it->distance > average)
-                good_matches.erase(it);
-            else
-                ++it;
+      // Calcular pontos 3D de cada match em ref
+      vector<int> istherepoint_ref(good_matches.size());
+      octree::OctreePointCloudSearch<PointTN> oct2(0.02);
+      oct2.setInputCloud(cref);
+      oct2.addPointsFromInputCloud();
+#pragma omp parallel for
+      for(int i=0; i<good_matches.size(); i++){
+        float u = kpref[good_matches[i].trainIdx].pt.x, v = kpref[good_matches[i].trainIdx].pt.y;
+        Vector3f dir;
+        dir << (u - cx)/fx, (v - cy)/fy, 1;
+        octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector align;
+        oct2.getIntersectedVoxelCenters(Vector3f::Zero(), dir.normalized(), align, 1);
+        // Se achou, adicionar na lista de pontos 3D naquele local
+        if(align.size() > 0){
+          vector<int> ind;
+          vector<float> dists;
+          oct2.nearestKSearch(align[0], 1, ind, dists);
+          if(ind.size() > 0){
+            istherepoint_ref[i] = 1;
+            cmr->points[i] = cref->points[ind[0]];
+          } else {
+            istherepoint_ref[i] = 0;
+          }
+        } else {
+          istherepoint_ref[i] = 0;
         }
-        // Filtrando por angulo das linhas entre os matches
-        this->filterMatchesLineCoeff(good_matches, kpref, kpnow, imref.cols, 2);
+      }
 
-        tent += 1;
-        min_hessian *= 0.7;
-        maxfeat += 10;
-
-        // Achando realmente os keypoints bons e anotando coordenadas
-        imrefpts.resize(good_matches.size()); imnowpts.resize(good_matches.size());
-        for (size_t i = 0; i < good_matches.size(); i++){
-            imrefpts[i]  = kpref[good_matches[i].queryIdx].pt;
-            imnowpts[i]  = kpnow[good_matches[i].trainIdx].pt;
+      // Preencher nuvens de pontos correspondentes
+      PointCloud<PointTN>::Ptr tempn (new PointCloud<PointTN>), tempr (new PointCloud<PointTN>);
+      for(int i=0; i<good_matches.size(); i++){
+        if(istherepoint_now[i] == 1 && istherepoint_ref[i] == 1){
+          tempn->push_back(cmn->points[i]); tempr->push_back(cmr->points[i]);
         }
-
-        // Se ha matches suficientes, buscar nas nuvens 3D auxiliar se aquele ponto e correspondente
-        // ao pixel daquela match
-        if(good_matches.size() > 5){
-            ////            vector< DMatch > good_temp(good_matches.begin(), good_matches.begin()+4);
-            ////            vector< Point2f > tempnow(imnowpts.begin(), imnowpts.begin()+4), tempref(imrefpts.begin(), imrefpts.begin()+4);
-            //            // Encontrar a homografia entre as imagens - de now para ref
-            //            Mat h = findHomography(imnowpts, imrefpts);
-            //            // Matriz de homografia em Eigen
-            //            Matrix3f H;
-            //            cv2eigen(h, H);
-            //            // Projetando os pixels de now para ref
-            //            for(int i=0; i<nowpix.rows(); i++){
-            //                for(int j=0; j<nowpix.cols(); j++){
-            //                    // Se aqui existe um ponto da nuvem
-            //                    if(nowpix(i, j) != -1){
-            //                        Vector3f X_{j, i, 1};
-            //                        Vector3f X = H*X_;
-            //                        X = X/X(2);
-            //                        int u = X(1), v = X(0);
-            //                        // Se caiu dentro da outra imagem e ali tambem existe um ponto, anotar
-            //                        if(u > 0 && u < nowpix.rows() && v > 0 && v < nowpix.cols()){
-            //                            if(this->searchNeighbors(refpix, u, v, l) != -1){
-            //                                Point2d m3d;
-            //                                m3d.x = refpix(u, v); m3d.y = nowpix(i, j);
-            //                                goodimrefpts.push_back(Point2f(v, u)); goodimnowpts.push_back(Point2f(j, i));
-            //                                matches3d.push_back(m3d); // Primeiro referencia ref, depois atual now
-            //                            }
-            //                        }
-            //                    }
-            //                }
-            //            }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-            // Para cada match
-            for(size_t j=0; j<good_matches.size(); j++){
-                int curr_pt_ref = -1, curr_pt_now = -1; // Indice do melhor ponto no momento
-                // Na imagem ref ver se naquela redondeza ha um pixel
-                curr_pt_ref = this->searchNeighbors(refpix, imrefpts[j].y, imrefpts[j].x, l);
-                // Na imagem now ver se naquela redondeza ha um pixel
-                curr_pt_now = this->searchNeighbors(nowpix, imnowpts[j].y, imnowpts[j].x, l);
-                // Se foi encontrado um indice para cada nuvem, anotar isso no vetor de indices de match nas nuvens
-                if(curr_pt_ref != -1 && curr_pt_now != -1){
-                    Point2d m3d;
-                    m3d.x = curr_pt_ref; m3d.y = curr_pt_now;
-                    goodimrefpts.push_back(imrefpts[j]); goodimnowpts.push_back(imnowpts[j]);
-                    matches3d.push_back(m3d); // Primeiro referencia ref, depois atual now
-                }
-                //            // Se achou ja npontos3d de matches boas, podemos parar aqui
-                //            if(matches3d.size() > npontos3d)
-                //                    break;
-            } // Fim do for de matches
-        }
-    } // Fim do while
-
-    // Se nao deu certo, avisar com enfase
-    if(matches3d.size() < npontos3d)
-        ROS_WARN("NAO ACHAMOS %d CORRESPONDENCIAS, MAS SIM %zu", npontos3d, matches3d.size());
-    if(matches3d.size() == 0)
-        ROS_WARN("NAO ACHAMOS CORRESPONDENCIAS, ATENCAO !!");
+      }
+      *cmn = *tempn; *cmr = *tempr;
+    }
 
     // Plotando os dados para debugar
-    this->plotDebug(imref, imnow, cref, cnow, goodimrefpts, goodimnowpts, matches3d);
+//    this->plotDebug(imref, imnow, cref, cnow, goodimrefpts, goodimnowpts, matches3d);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 Matrix4f RegisterObjectOptm::optmizeTransformLeastSquares(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
@@ -400,18 +356,12 @@ void RegisterObjectOptm::plotDebug(Mat imref, Mat imnow, PointCloud<PointTN>::Pt
     savePLYFileBinary<PointTN>(pasta+"debugnowt.ply", *cnt);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-Matrix4f RegisterObjectOptm::optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow, vector<Point2d> matches3d){
+Matrix4f RegisterObjectOptm::optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow){
     // Inicia estimador
     registration::TransformationEstimationSVD<PointTN, PointTN> svd;
-    PointIndices pref, pnow;
     Matrix4f Tsvd;
-    // Anota os indices vindos dos matches para os pontos correspondentes em cada nuvem
-    for(int i=0; i<matches3d.size(); i++){
-        pref.indices.push_back(matches3d[i].x);
-        pnow.indices.push_back(matches3d[i].y);
-    }
     // Estima a transformacao
-    svd.estimateRigidTransformation(*cnow, pnow.indices, *cref, pref.indices, Tsvd);
+    svd.estimateRigidTransformation(*cnow, *cref, Tsvd);
 
     return Tsvd;
 }
@@ -493,6 +443,7 @@ void RegisterObjectOptm::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, Po
         // Retirando indices NaN se existirem
         vector<int> indicesNaN;
         removeNaNFromPointCloud(*cnow, *cnow, indicesNaN);
+        removeNaNFromPointCloud(*cobj, *cobj, indicesNaN);
         // Para cada ponto, se ja houver vizinhos, nao seguir
         for(size_t i=0; i<cnow->size(); i++){
             if(kdtree.radiusSearch(cnow->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate)

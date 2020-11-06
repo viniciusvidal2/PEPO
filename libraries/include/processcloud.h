@@ -111,12 +111,12 @@ public:
   Vector3f gettCam();
 
   void filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, float lon_c, float lat_fov, float lon_fov);
+  void cleanMisreadPoints(PointCloud<PointT>::Ptr cloud);
 
 private:
 
   void divideInOctreeLevels(PointCloud<PointT>::Ptr cloud, vector<PointCloud<PointT>> &leafs, float level);
   void removeNotProjectedThroughDefinedColor(PointCloud<PointT>::Ptr cloud, int r, int g, int b);
-  void cleanMisreadPoints(PointCloud<PointT>::Ptr cloud);
 
   /// Variaveis
   Matrix3f K1;

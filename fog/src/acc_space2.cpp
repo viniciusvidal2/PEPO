@@ -62,8 +62,8 @@ int filter_poli;
 Vector3f off_laser{0, 0, 0.04};
 
 // Vetores para resultados de tempo
-vector<float > tempos_transito_msg, tempos_filtra_cor, tempos_octree, tempos_demaisfiltros, tempos_normais, tempos_vizinhos_lastview;
-vector<size_t> pontos_demaisfiltros, pontos_covariancia, pontos_kdtree;
+vector<float > tempos_transito_msg, tempos_filtra_cor, tempos_octree, tempos_demaisfiltros, tempos_normais, tempos_vizinhos_lastview, tempos_rcast;
+vector<size_t> pontos_demaisfiltros, pontos_covariancia, pontos_kdtree, pontos_rcast;
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 int deg2raw(float deg, string motor){
@@ -109,6 +109,7 @@ void saveTimeFiles(){
   ofstream t_df(pasta+"tempos_df.txt");
   ofstream t_normais(pasta+"tempos_normais.txt");
   ofstream t_vlv(pasta+"tempos_vizinhoslastview.txt");
+  ofstream t_rcast(pasta+"tempos_raycasting.txt");
 
   // Escreve uma linha para cada valor
   if(t_msg.is_open()){
@@ -147,10 +148,16 @@ void saveTimeFiles(){
       t_vlv << "\n";
     }
   }
+  if(t_rcast.is_open()){
+    for(auto t:tempos_rcast){
+      t_rcast << t;
+      t_rcast << "\n";
+    }
+  }
 
   // Fecha arquivos
   t_msg.close(); t_cor.close(); t_octree.close();
-  t_df.close(); t_normais.close(); t_vlv.close();
+  t_df.close(); t_normais.close(); t_vlv.close(); t_rcast.close();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
 void savePointFiles(){
@@ -158,6 +165,7 @@ void savePointFiles(){
   ofstream p_df(pasta+"pontos_demaisfiltros.txt");
   ofstream p_cov(pasta+"pontos_covariancia.txt");
   ofstream p_kdt(pasta+"pontos_vizinhos_kdtree.txt");
+  ofstream p_rcast(pasta+"pontos_rcast.txt");
 
   // Escreve uma linha para cada valor
   if(p_df.is_open()){
@@ -178,9 +186,15 @@ void savePointFiles(){
       p_kdt << "\n";
     }
   }
+  if(p_rcast.is_open()){
+    for(auto p:pontos_rcast){
+      p_rcast << p;
+      p_rcast << "\n";
+    }
+  }
 
   // Fecha arquivos
-  p_df.close(); p_cov.close(); p_kdt.close();
+  p_df.close(); p_cov.close(); p_kdt.close(); p_rcast.close();
 }
 ///////////////////////////////////////////////////////////////////////////////////////////
 
@@ -227,7 +241,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
   ROS_INFO("Filtro raycasting ...");
   float clat = 90.0 - RAD2DEG(pitch_cameras.back()), clon = RAD2DEG(-pan_cameras.back()), fov = 38;
   if(clon < 0) clon += 360;
+  ros::Time trcast = ros::Time::now();
   pc->filterRayCasting(cloud, clat, clon, fov, fov);
+  tempos_rcast.emplace_back((ros::Time::now() - trcast).toSec());
+  pontos_rcast.emplace_back(cloud->size());
   // Realizar pre-processamento
   ROS_INFO("Pre-processamento com %zu pontos ...", cloud->size());
   PointCloud<PointTN>::Ptr cloud_normals (new PointCloud<PointTN>);
@@ -413,7 +430,7 @@ int main(int argc, char **argv)
   char* home;
   home = getenv("HOME");
   // Checando se ha a pasta spaces, senao criar
-  pasta = string(home)+"/Desktop/spaces/";
+  pasta = string(home)+"/Desktop/ambientes/";
   struct stat buffer;
   if(stat(pasta.c_str(), &buffer)) // Se nao existe a pasta
       mkdir(pasta.c_str(), 0777);
