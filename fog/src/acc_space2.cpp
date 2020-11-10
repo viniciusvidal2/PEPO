@@ -263,7 +263,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
   cloud->clear();
   ROS_INFO("Apos preprocessamento, com %zu pontos ...", cloud_normals->size());
   // Adiciona somente uma parcial daquela vista em pan - somente pontos novos!
-  float raio_vizinhos = (voxel_size > 0) ? 5*voxel_size/100.0f : 0.03;
+  float raio_vizinhos = (voxel_size > 0) ? 5*voxel_size/100.0f : 0.02;
   //    roo->searchNeighborsKdTree(cloud_normals, parcial, raio_vizinhos, 200.0);
   *parcial += *cloud_normals;
 
@@ -297,9 +297,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
       // Procurar por pontos ja existentes e retirar nesse caso
       // Se nao e a ultima
       if(abs(cont_aquisicao - msg_angle->pose.pose.orientation.w) > ntilts)
-        roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 130.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
+        roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 3.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
       else // Se for, comparar com a acumulada pra nao repetir pontos do inicio tambem
-        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos,  90.0);
+        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos, 3.0);
 
       pontos_kdtree.push_back(parcial_pontos_novos->size());
 
@@ -311,16 +311,16 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
     }
 
     // Salvar a vista da esquerda para a proxima iteracao
-    Matrix3f R = pc->euler2matrix(0, 0, -DEG2RAD(raw2deg(pan, "pan")));
+    Matrix3f R = pc->euler2matrix(0, 0, *pan_cameras.end());
     Quaternion<float> q(R);
-    transformPointCloudWithNormals(*parcial, *parcial_esq_anterior, q.inverse()*off_laser, q.inverse());
+    transformPointCloudWithNormals(*parcial, *parcial_esq_anterior, Vector3f::Zero(), q);
     PassThrough<PointTN> pass;
     pass.setFilterFieldName("x");
     pass.setFilterLimits(0, 100); // Negativo de tudo no eixo X
     pass.setNegative(true);
     pass.setInputCloud(parcial_esq_anterior);
     pass.filter(*parcial_esq_anterior);
-    transformPointCloudWithNormals(*parcial_esq_anterior, *parcial_esq_anterior, q*off_laser, q);
+    transformPointCloudWithNormals(*parcial_esq_anterior, *parcial_esq_anterior, Vector3f::Zero(), q.inverse());
 
     tempos_vizinhos_lastview.push_back((ros::Time::now() - tempo).toSec());
 

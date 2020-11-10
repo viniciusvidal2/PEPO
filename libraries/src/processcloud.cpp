@@ -337,7 +337,7 @@ void ProcessCloud::preprocess(PointCloud<PointT>::Ptr cin, PointCloud<PointTN>::
   tempo_cor = (ros::Time::now() - tempo).toSec();
   tempo = ros::Time::now();
 
-  bool com_octree = false;
+  bool com_octree = true;
   /////////////////////////////////////////////////////////////
   /// Parte sem octree - ver como o tempo varia
   ///
@@ -707,7 +707,7 @@ void ProcessCloud::blueprint(PointCloud<PointTN>::Ptr cloud_in, float sa, float 
   PointCloud<PointTN>::Ptr cloud (new PointCloud<PointTN>);
   *cloud = *cloud_in;
   // Filtrando a altura que vai entrar na roda
-  float metros_altura_acima_pepo = 2; // quantos metros acima do PEPO para fazer a nuvem
+  float metros_altura_acima_pepo = 1; // quantos metros acima do PEPO para fazer a nuvem
   PassThrough<PointTN> pass;
   pass.setFilterFieldName("y");
   pass.setFilterLimits(-metros_altura_acima_pepo, 100); // Negativo de tudo no eixo Y
@@ -771,11 +771,11 @@ void ProcessCloud::filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, flo
   /// Latitude: 0 - 180 / Longitude: 0 - 360
 
   // Resolucao em graus
-  float step_deg = 0.07; // [DEGREES]
+  float step_deg = 0.12; // [DEGREES]
   int nlat = lat_fov/step_deg, nlon = lon_fov/step_deg;
   // Nuvem de pontos com a resolucao dos angulos para ray casting
   PointCloud<PointT>::Ptr rc (new PointCloud<PointT>);
-  OctreePointCloudSearch<PointT> oct(0.006);
+  OctreePointCloudSearch<PointT> oct(0.01);
   OctreePointCloudSearch<PointT>::AlignedPointTVector align_pts;
   oct.setInputCloud(in);
   oct.addPointsFromInputCloud();
