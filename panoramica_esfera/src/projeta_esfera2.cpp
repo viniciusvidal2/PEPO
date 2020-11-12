@@ -26,6 +26,9 @@
 #include "opencv2/calib3d.hpp"
 #include <opencv2/stitching/detail/blenders.hpp>
 
+
+
+#include "RANSAC_algo.hpp"
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
 #include <Eigen/Core>
@@ -38,7 +41,7 @@ using namespace cv;
 using namespace std;
 using namespace Eigen;
 using namespace cv::xfeatures2d;
-typedef PointXYZRGBNormal PointTN;
+typedef PointXYZRGBNormal PointT;
 typedef PointXYZRGB       PointC;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,7 +91,7 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 #pragma omp parallel for
 		for (int i = 0; i < img.cols; i++)
 		{
-			for (int j = valV.first->y; j < valV.first->y + sizeV / 2 - 5; j++)
+			for (int j = valV.first->y; j < valV.first->y + sizeV / 2 - 11; j++)
 			{
 				Vec3b color1(0, 0, 0);
 				img.at< Vec3b>(Point(i, j)) = color1;
@@ -357,22 +360,16 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 }
 Mat multiband_blending(Mat &a, const Mat &b, int k) {
 
-
 	int level_num = 4;//numero de niveis
+	/*int w = a.cols, h = a.rows;*/
 
-	Mat a_pyramid[4];
-	Mat b_pyramid[4];
+	Mat* a_pyramid = new Mat[level_num];
+	Mat* b_pyramid = new Mat[level_num];
+	Mat* mask = new Mat[level_num];
 
-	Mat mask[4];
 
 	a_pyramid[0] = a;
 	b_pyramid[0] = b;
-
-	int w = a.cols, h = a.rows; //
-
-	Mat teste(h, w, CV_32FC3, Scalar(0, 0, 0));
-	teste.convertTo(teste, CV_32F, 1.0 / 255.0);
-	mask[0] = teste;
 
 	//Contorno imagem 1
 	Mat src_gray;
@@ -383,7 +380,7 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 	vector<Vec4i> hierarchy;
 
 	findContours(src_gray, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE); // Find the contours in the image
-
+#pragma omp parallel for
 	for (int i = 0; i < contours.size(); i++) // iterate through each contour.
 	{
 		Scalar color(255, 255, 255);
@@ -399,27 +396,28 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 	vector<Vec4i> hierarchy1;
 
 	findContours(src_gray1, contours1, hierarchy1, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE); // Encontrando contorno
+#pragma omp parallel for
 	for (int i = 0; i < contours1.size(); i++)
 	{
-
 		Scalar color(255, 255, 255);
 		drawContours(dst1, contours1, i, color, CV_FILLED);
 	}
 
 	//Parte comum entre as imagens
-	Mat out(dst1.rows, dst1.cols, CV_8UC3, Scalar::all(0));
-	bitwise_and(dst, dst1, out);
-
+	Mat out(src_gray1.rows, src_gray1.cols, CV_8UC3, Scalar::all(0));
+	bitwise_and(dst1, dst, out);
+	/*imwrite("C:/dataset3/areaComum.png", out);*/
 	/////////////Contorno Parte comum
 	Mat src_gray3;
+	//src_gray3 = out;
 	cvtColor(out, src_gray3, CV_BGR2GRAY);
 	src_gray3.convertTo(src_gray3, CV_8UC3, 255);
 	Mat dst3(src_gray3.rows, src_gray3.cols, CV_8UC3, Scalar::all(0));
 	vector<vector<Point> > contours3; // Vector for storing contour
 	vector<Vec4i> hierarchy3;
 
-	findContours(src_gray3, contours3, hierarchy3, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE); // Find the contours in the image
-
+	findContours(src_gray3, contours3, hierarchy3, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE); // Find the contours in the image
+#pragma omp parallel for
 	for (int i = 0; i < contours3.size(); i++) // iterate through each contour.
 	{
 		Scalar color(255, 255, 255);
@@ -427,10 +425,11 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 	}
 
 	//Encontrando a máscara
-
-	Mat mask_out = createMask(out, contours3, k);
-
+	
+	Mat mask_out = createMask(dst3, contours3, k);
+	
 	cv::subtract(dst, mask_out, dst);
+		
 	dst.convertTo(dst, CV_32FC3, 1.0 / 255.0);
 	mask[0] = dst;
 
@@ -439,77 +438,77 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 
 	for (int i = 1; i < level_num; ++i)
 	{
-		int wp = a_pyramid[i - 1].rows / 2;
-		int hp = a_pyramid[i - 1].cols / 2;
+		/*int wp = a_pyramid[i - 1].rows / 2;
+		int hp = a_pyramid[i - 1].cols / 2;*/
 
+		Mat new_a, new_b, new_mask;
 
-		Mat a_pic, b_pic, mask_pic;
+		// a imagem é inicialmente desfocada e depois reduzida
+		pyrDown(a_pyramid[i - 1], new_a, Size(a_pyramid[i - 1].cols / 2, a_pyramid[i - 1].rows / 2));
+		pyrDown(b_pyramid[i - 1], new_b, Size(a_pyramid[i - 1].cols / 2, a_pyramid[i - 1].rows / 2));
+		pyrDown(mask[i - 1], new_mask, Size(a_pyramid[i - 1].cols / 2, a_pyramid[i - 1].rows / 2));
 
-		a_pic = GaussianFilter(a_pyramid[i - 1], 2);
-		b_pic = GaussianFilter(b_pyramid[i - 1], 2);
-		mask_pic = GaussianFilter(mask[i - 1], 2);
-
-		Mat new_a(wp, hp, CV_32FC3, cv::Scalar(0, 0, 0));
-		Mat new_b(wp, hp, CV_32FC3, cv::Scalar(0, 0, 0));
-		Mat new_mask(wp, hp, CV_32FC3, cv::Scalar(0, 0, 0));
-
-#pragma omp parallel for
-		for (int r = 0; r < new_a.cols; r++) {
-			for (int c = 0; c < new_a.rows; c++)
-			{
-				for (int k = 0; k < 3; k++)
-				{
-					new_a.at<Vec3f>(Point(r, c))[k] = a_pic.at<Vec3f>(Point(2 * r, 2 * c))[k];
-					new_b.at<Vec3f>(Point(r, c))[k] = b_pic.at<Vec3f>(Point(2 * r, 2 * c))[k];
-					new_mask.at<Vec3f>(Point(r, c))[k] = mask_pic.at<Vec3f>(Point(2 * r, 2 * c))[k];
-				}
-			}
-		}
 		a_pyramid[i] = new_a;
 		b_pyramid[i] = new_b;
-		mask[i] = new_mask;
+		mask[i] = new_mask;	
 	}
 
 	//Computando a piramide Laplaciana das imagens e da máscara
 	//Expande as imagens, fazendo elas maiores de forma que seja possivel subtrai-las
-	//Subtrair cada nivel da piramide
-//	
-	auto start2 = chrono::steady_clock::now();
+	//Subtrair cada nivel da pirâmide
+
+
 	for (int i = 0; i < level_num - 1; ++i) {
-		int wp = a_pyramid[i].cols;
-		int hp = a_pyramid[i].rows;
+	/*	int wp = a_pyramid[i].cols;
+		int hp = a_pyramid[i].rows;*/
 
-		Mat dst_a, dst_b, new_a, new_b;
+		cv::Mat dst_a, dst_b, new_a, new_b;
 
-		resize(a_pyramid[i + 1], dst_a, cv::Size(wp, hp));
-		resize(b_pyramid[i + 1], dst_b, cv::Size(wp, hp));
+		cv::resize(a_pyramid[i + 1], dst_a, cv::Size(a_pyramid[i].cols, a_pyramid[i].rows));
+		cv::resize(b_pyramid[i + 1], dst_b, cv::Size(a_pyramid[i].cols, a_pyramid[i].rows));
 
-		subtract(a_pyramid[i], dst_a, a_pyramid[i]);
-		subtract(b_pyramid[i], dst_b, b_pyramid[i]);
-
-
+		cv::subtract(a_pyramid[i], dst_a, a_pyramid[i]);
+		cv::subtract(b_pyramid[i], dst_b, b_pyramid[i]);
 	}
 
-	// Criação da imagem "misturada" em cada nivel da piramide
 
-	Mat blend_pyramid[4];
+	// Criação da imagem "misturada" em cada nível da piramide
+
+
+	Mat* blend_pyramid = new Mat[level_num];
 	for (int i = 0; i < level_num; ++i)
 	{
-
 		Mat fin(a_pyramid[i].rows, a_pyramid[i].cols, CV_32FC3, cv::Scalar(0, 0, 0));
 		blend_pyramid[i] = fin;
-		Mat A = a_pyramid[i].mul(mask[i]);
+
+		//Mat A = a_pyramid[i].mul(mask[i]);
 
 		Mat antiMask = Scalar(1.0, 1.0, 1.0) - mask[i];
-		Mat B = b_pyramid[i].mul(antiMask);
-		blend_pyramid[i] = A + B;
 
+		//Mat B = b_pyramid[i].mul(antiMask);
+		
+		//blend_pyramid[i] = A+ B;
+		blend_pyramid[i] = a_pyramid[i].mul(mask[i]) + b_pyramid[i].mul(antiMask);
+		/*Mat fin(a_pyramid[i].rows, a_pyramid[i].cols, CV_32FC3, cv::Scalar(0, 0, 0));
+		blend_pyramid[i] = fin;*/
+
+//	
+//#pragma omp parallel for 
+//		for (int x = 0; x < blend_pyramid[i].cols; x++)
+//		{
+//			for (int y = 0; y < blend_pyramid[i].rows; y++)
+//			{
+//				for (int k = 0; k < 3; k++) {
+//					blend_pyramid[i].at<Vec3f>(Point(x, y))[k] = a_pyramid[i].at<Vec3f>(Point(x, y))[k] * mask[i].at<Vec3f>(Point(x, y))[k] + b_pyramid[i].at<Vec3f>(Point(x, y))[k] * (1.0 - mask[i].at<Vec3f>(Point(x, y))[k]);
+//				}
+//			}
+//		}
 
 	}
 
 	//Reconstruir a imagem completa
-//O nível mais baixo da nova pirâmide gaussiana dá o resultado final
-	auto start4 = chrono::steady_clock::now();
+	//O nível mais baixo da nova pirâmide gaussiana dá o resultado final
+
 	Mat expand = blend_pyramid[level_num - 1];
 	for (int i = level_num - 2; i >= 0; --i)
 	{
@@ -518,7 +517,8 @@ Mat multiband_blending(Mat &a, const Mat &b, int k) {
 		add(blend_pyramid[i], expand, expand);
 
 	}
-
+	
+	
 	return expand;
 }
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -537,7 +537,8 @@ Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &C, int i) {
 
 	Matrix4f T = Matrix4f::Identity();
 	T.block<3, 3>(0, 0) = r.transpose(); T.block<3, 1>(0, 3) = t;
-
+	
+	
 	return T;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -570,8 +571,23 @@ void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &im
 		}
 	}
 }
+Mat RootSift(Mat image, vector < KeyPoint> kps)
+{
+	Ptr<DescriptorExtractor> extractor = SIFT::create();
+	Mat descs;
+	extractor->compute(image, kps, descs);
+	for (int i = 0; i < descs.rows; ++i) {
+		// Perform L1 normalization
+		normalize(descs.row(i), descs.row(i), 1.0, 0.0, cv::NORM_L1);
+		//descs.row(i) /= (cv::norm(descs.row(i), cv::NORM_L1) + eps);
+	}
+	// Perform sqrt on the whole descriptor matrix
+	sqrt(descs, descs);
+	return (descs);
+}
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-int main(int argc, char **argv) {
+int main(int argc, char **argv) 
+{
 	// Coisa do ros, apagar
 	/*ros::init(argc, argv, "otimiza_bat");
 	ros::NodeHandle nh;*/
@@ -580,7 +596,7 @@ int main(int argc, char **argv) {
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada1/";
+	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada2/";
 	std::string arquivo_nvm = pasta + "cameras.sfm";
 
 	ifstream nvm(arquivo_nvm);
@@ -627,7 +643,7 @@ int main(int argc, char **argv) {
 	int i = 0;
 	int cont = 0;
 
-	while (cont < 6) {
+while (cont < 6) {
 
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 7;
@@ -740,24 +756,27 @@ int main(int argc, char **argv) {
 	// Supoe a esfera com resolucao em graus de tal forma - resolucao da imagem final
 	float R = 5; // Raio da esfera [m]
 	// Angulos para lat e lon, 360 de range para cada, resolucao a definir no step_deg
-	float step_deg = 0.1; // [DEGREES]
+	float step_deg = 0.05; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
 	/// Para cada imagem
-	Mat imagem_esferica[100];
+	int img_num = linhas.size();
+	Mat* imagem_esferica = new Mat[img_num];
+	std::vector <cv::Mat> vect;
+	
 	Mat result1 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 	Mat result2 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 	Mat result3 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 	Mat result4 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat anterior1 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat anterior2 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
+	Mat anterior = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
+	/*Mat anterior2 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 	Mat anterior3 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat anterior4 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
+	Mat anterior4 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);*/
 
 	int contador = 0;
 	Mat im360 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
 	//ros::Time tempo = ros::Time::now();
-	//auto start = chrono::steady_clock::now();
+	auto start = chrono::steady_clock::now();
 	printf("Processando cada foto, sem print nenhum pra ir mais rapido ...\n");
 	for (int i = 0; i < nomes_imagens.size(); i++)
 	{
@@ -766,7 +785,15 @@ int main(int argc, char **argv) {
 		Mat image = imread(nomes_imagens[i]);
 		if (image.cols < 3)
 			cout << ("Imagem nao foi encontrada, checar NVM ...");
-
+		
+//		//Mat params = (Mat_<double>(1, 5) << 0.0723, -0.1413, -0.0025 ,- 0.0001, 0.0000);
+//		//Mat K = (Mat_<double>(3, 3) << 1427.099976, 0.0, 987.900024,
+//		//	0.0, 1449.400024, 579.400024,
+//		//	0.0, 0.0, 1.0);
+//		//// Tirar distorcao da imagem - fica melhor sim o resultado ou proximo
+//		//Mat temp;
+//		//undistort(image, temp, K, params);
+//		//temp.copyTo(image);
 		// Calcular a vista da camera pelo Rt inverso - rotacionar para o nosso mundo, com Z para cima
 		Matrix4f T;
 		if (flag == 1) {
@@ -776,7 +803,8 @@ int main(int argc, char **argv) {
 
 			T = calculateCameraPose(rots[i], Cs[i], i);
 		}
-		// Definir o foco em dimensoes fisicas do frustrum
+		
+				// Definir o foco em dimensoes fisicas do frustrum
 		float F = R;
 		Vector3f C = Cs[i];
 		double minX, minY, maxX, maxY;
@@ -784,15 +812,15 @@ int main(int argc, char **argv) {
 		minX = -maxX;
 		maxY = F * (float(image.rows) / (2.0*foco[1]));
 		minY = -maxY;
-		// Calcular os 4 pontos do frustrum
-		/*
-								origin of the camera = p1
-								p2--------p3
-								|          |
-								|  pCenter |<--- Looking from p1 to pCenter
-								|          |
-								p5--------p4
-		*/
+//		// Calcular os 4 pontos do frustrum
+//		/*
+//								origin of the camera = p1
+//								p2--------p3
+//								|          |
+//								|  pCenter |<--- Looking from p1 to pCenter
+//								|          |
+//								p5--------p4
+//		*/
 		Vector4f p, p1, p2, p3, p4, p5, pCenter;
 		p << 0, 0, 0, 1;
 		p1 = T * p;
@@ -808,62 +836,72 @@ int main(int argc, char **argv) {
 		pCenter = T * p;
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
 		imagem_esferica[i] = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
-
+		
 		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), image, im360, imagem_esferica[i]);		//imagem_esferica[i] = im360;
-
+		//imwrite("C:/dataset3/im360.png", im360 );
 		if (i == 0) {
 			index = 0;
-			anterior1 = imagem_esferica[i];
-			anterior1.convertTo(anterior1, CV_32F, 1.0 / 255.0);
+			anterior = imagem_esferica[i];
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
 		}
 		if (i > 0 && i < 12)
 		{
+			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
-			result1 = multiband_blending(anterior1, imagem_esferica[i], index);
-			anterior1 = result1;
-
+			result1 = multiband_blending(anterior, imagem_esferica[i], index);
+			anterior = result1;
+			imwrite("C:/dataset3/imagem_esferica_result.png", result1 * 255);
 		}
 		if (i == 12) {
 			index = 0;
-			anterior2 = imagem_esferica[i];
-			anterior2.convertTo(anterior2, CV_32F, 1.0 / 255.0);
+			anterior.release();
+			anterior = imagem_esferica[i];
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
 		}
 
 		if (i > 12 && i < 24)
 		{
+			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
-			result2 = multiband_blending(anterior2, imagem_esferica[i], index);
-			anterior2 = result2;
+			result2 = multiband_blending(anterior, imagem_esferica[i], index);
+			anterior = result2;
+			//imwrite("C:/dataset3/imagem_esferica_result.png", result2 * 255);
 
 		}
 		if (i == 24)
 		{
 			index = 0;
-
-			anterior3 = imagem_esferica[i];
-			anterior3.convertTo(anterior3, CV_32F, 1.0 / 255.0);
+			anterior.release();
+			anterior = imagem_esferica[i];
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
 		}
 
 		if (i > 24 && i < 36)
 		{
+			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
-			result3 = multiband_blending(anterior3, imagem_esferica[i], index);
-			anterior3 = result3;
+			result3 = multiband_blending(anterior, imagem_esferica[i], index);
+			anterior = result3;
+			//imwrite("C:/dataset3/imagem_esferica_result.png", result3 * 255);
 
 
 		}
 		if (i == 36) {
 			index = 0;
-			anterior4 = imagem_esferica[i];
-			anterior4.convertTo(anterior4, CV_32F, 1.0 / 255.0);
+			anterior.release();
+			anterior = imagem_esferica[i];
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
 		}
 
 		if (i > 36 && i < 48)
 		{
+			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
 			imagem_esferica[i].convertTo(imagem_esferica[i], CV_32F, 1.0 / 255.0);
-			result4 = multiband_blending(anterior4, imagem_esferica[i], index);
-			anterior4 = result4;
-			//result4.convertTo(result4, CV_8UC3, 255);
+			result4 = multiband_blending(anterior, imagem_esferica[i], index);
+			anterior = result4;
+			//imwrite("C:/dataset3/imagem_esferica_result.png", result4 * 255);
+
+		//	//result4.convertTo(result4, CV_8UC3, 255);
 		}
 		index++;
 	} // Fim do for imagens;
@@ -875,17 +913,18 @@ int main(int argc, char **argv) {
 	result = multiband_blending(result, result2, index);
 	result = multiband_blending(result, result1, index);
 	result.convertTo(result, CV_8UC3, 255);
-	imwrite(pasta + "imagem_esferica_Blending.png", result);
+	imwrite(pasta + "imagem_esferica_Blending_Res005.png", result);
 
-	//auto end = chrono::steady_clock::now();
+	auto end = chrono::steady_clock::now();
 	//// Store the time difference between start and end
-	//auto diff = end - start;
-	//cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
+	auto diff = end - start;
+	cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
 	//ROS_WARN("Tempo para processar: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 	// Salvando imagem esferica final
-	imwrite(pasta + "imagem_esferica_result.png", im360);
+	imwrite(pasta + "imagem_esferica_result_Homografia.png", im360);
 	printf("Processo finalizado.");
 
 	return 0;
+
 }
 
