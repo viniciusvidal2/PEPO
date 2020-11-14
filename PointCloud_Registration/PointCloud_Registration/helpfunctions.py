@@ -50,7 +50,6 @@ def draw_registration_result_original_color(source, target, transformation,name)
     source_temp.transform(transformation) 
     newpointcloud = source_temp + target         
     draw_geometries([newpointcloud])             
-    draw_geometries([source_temp, target])
     write_point_cloud (name, newpointcloud)  
 
 
