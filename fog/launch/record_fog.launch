@@ -1,6 +1,0 @@
-<launch>
-    <arg name="bag" default="record_fog"/>
-
-    <node name="rosbag_record" pkg="rosbag" type="record" output="screen" args="/cloud_space /angle_space /image_user -O /home/$(env USER)/Desktop/$(arg bag).bag">
-    </node>
-</launch>
