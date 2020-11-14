@@ -242,7 +242,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
   float clat = 90.0 - RAD2DEG(pitch_cameras.back()), clon = RAD2DEG(-pan_cameras.back()), fov = 38;
   if(clon < 0) clon += 360;
   ros::Time trcast = ros::Time::now();
-  pc->filterRayCasting(cloud, clat, clon, fov, fov);
+//  pc->filterRayCasting(cloud, clat, clon, fov, fov);
   tempos_rcast.emplace_back((ros::Time::now() - trcast).toSec());
   pontos_rcast.emplace_back(cloud->size());
   // Realizar pre-processamento
@@ -297,9 +297,9 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
       // Procurar por pontos ja existentes e retirar nesse caso
       // Se nao e a ultima
       if(abs(cont_aquisicao - msg_angle->pose.pose.orientation.w) > ntilts)
-        roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 3.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
+        roo->searchNeighborsKdTree(parcial_pontos_novos, parcial_esq_anterior, raio_vizinhos, 10.0); // quanto maior o ultimo valor, maior o raio que eu aceito ter vizinhos
       else // Se for, comparar com a acumulada pra nao repetir pontos do inicio tambem
-        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos, 3.0);
+        roo->searchNeighborsKdTree(parcial_pontos_novos, acc                 , raio_vizinhos, 10.0);
 
       pontos_kdtree.push_back(parcial_pontos_novos->size());
 
@@ -352,10 +352,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
     ROS_INFO("Processando todo o SFM otimizado ...");
     for(int i=0; i<pan_cameras.size(); i++){
       // Calcula a matriz de rotacao da camera
-      float r = roll_cameras[i], t = pitch_cameras[i], p = pan_cameras[i]; // [RAD]
+      float r = -roll_cameras[i], t = -pitch_cameras[i], p = -pan_cameras[i]; // [RAD]
 //      Matrix3f Rt = pc->euler2matrix(0, -DEG2RAD(t), 0);
       Matrix3f Rp = pc->euler2matrix(0, 0, -p);
-      Matrix3f Rcam = pc->euler2matrix(r, t, p);//(Rp*Rt).transpose();
+      Matrix3f Rcam = pc->euler2matrix(0, t, p).inverse();//(Rp*Rt).transpose();
 
       // Calcula centro da camera
       Vector3f C = Rp*off_laser;
@@ -378,7 +378,7 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
         nome_imagem = "imagem_0" +std::to_string(i+1)+".png";
       else
         nome_imagem = "imagem_"  +std::to_string(i+1)+".png";
-      linhas_sfm.push_back(pc->escreve_linha_sfm(nome_imagem, Rcam, Vector3f::Zero()));
+      linhas_sfm.push_back(pc->escreve_linha_sfm(nome_imagem, Rcam, tcam));
     }
     ROS_INFO("Salvando nuvem acumulada final ...");
     pc->saveCloud(acc, "acumulada");

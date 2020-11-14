@@ -170,13 +170,11 @@ int main(int argc, char **argv)
   // Pose da nuvem agora e na referencia
   Matrix4f Tnow, Tref;
   // Centro e orientacao da camera naquela aquisicao
-  Vector3f C;
-  Quaternion<float> q;
-  // Vetor de offset entre centro do laser e da camera - desenho solid, e foco
-  Vector3f t_off_lc(0.00, 0.0443, 0.023);
+  Vector3f tcam;
+  Matrix3f Rcam;
   float f = 1130;
-  // Vetor de linhas para NVM
-  vector<string> linhas_nvm;
+  // Vetor de linhas para SFM
+  vector<string> linhas_sfm;
 
 
   StatisticalOutlierRemoval<PointT> sor;
@@ -203,13 +201,11 @@ int main(int argc, char **argv)
     msg.header.stamp = ros::Time::now();
     pub.publish(msg);
 
-    //        // Inicia pose e escreve para o NVM
+    // Inicia pose e escreve para o NVM
     Tref = Matrix4f::Identity();
     Tnow = Tref;
-    //        C = -t_off_lc;
-    //        q = Quaternion<float>::Identity();
-    //        linhas_nvm.push_back(pc.escreve_linha_imagem(f, nomes_imagens[0], C, q));
 
+    linhas_sfm.push_back(pc.escreve_linha_sfm(nomes_imagens[0], Matrix3f::Identity(), -pc.gettCam()));
   }
 
   /// A partir da segunda nuvem e imagem, processo de match e anotacao
@@ -242,7 +238,7 @@ int main(int argc, char **argv)
 
     // Continuamos somente se a imagem forneceu matches
     Matrix4f Ticp = Matrix4f::Identity(), Tapp = Matrix4f::Identity();
-    if(cmatchnow->size() > 5){
+    if(cmatchnow->size() > 10){
       // Rodar a otimizacao da transformada por SVD
       ROS_INFO("Otimizando a transformacao relativa das nuvens por SVD ...");
       Tnow = roo.optmizeTransformSVD(cmatchref, cmatchnow);
@@ -264,7 +260,7 @@ int main(int argc, char **argv)
         ROS_INFO("Calculating voxelgrid BSHOT...");
         cb->calculate_voxel_grid_keypoints (0.03);
         ROS_INFO("Calculating SHOT descriptors ...");
-        cb->calculate_SHOT (0.15);
+        cb->calculate_SHOT (0.10);
         ROS_INFO("Calculating BSHOT descriptors ...");
         cb->compute_bshot();
         ROS_INFO("Calculating Correspondences ...");
@@ -275,7 +271,7 @@ int main(int argc, char **argv)
 
       // Refina a transformacao por ICP com poucas iteracoes
       ROS_INFO("Refinando registro por ICP ...");
-      Ticp = roo.icp(cobj, cnow, 0.02, 50);
+      Ticp = roo.gicp6d(cobj, cnow, 0.02, 200);
     } else {
       ROS_INFO("Nao encontrou match por features, refinando registro por BSHOT e ICP ...");
       // Inicia nuvem source do bshot
@@ -286,26 +282,27 @@ int main(int argc, char **argv)
       ROS_INFO("Calculating voxelgrid BSHOT...");
       cb->calculate_voxel_grid_keypoints (0.03);
       ROS_INFO("Calculating SHOT descriptors ...");
-      cb->calculate_SHOT (0.15);
+      cb->calculate_SHOT (0.10);
       ROS_INFO("Calculating BSHOT descriptors ...");
       cb->compute_bshot();
       ROS_INFO("Calculating Correspondences ...");
       Matrix4f Tbshot = bshot_correspondences();
       transformPointCloudWithNormals<PointTN>(*cnow, *cnow, Tbshot);
+      Tapp = Tbshot;
       // Refina a transformacao por ICP com mais iteracoes
       ROS_INFO("Refinando registro por ICP ...");
-      Ticp = roo.icp(cobj, cnow, 0.03, 100);
+      Ticp = roo.gicp6d(cobj, cnow, 0.02, 200);
     }
 
     transformPointCloudWithNormals<PointTN>(*cnow, *cnow, Ticp);
 
     // Soma a nuvem transformada e poe no lugar certo somente pontos "novos"
     ROS_INFO("Registrando nuvem atual no objeto final ...");
-    Matrix4f Tobj = Ticp*Tapp*Tobj;
+    Matrix4f Tobj = Ticp*Tapp*Tref;
 
     PointCloud<PointTN>::Ptr cnowtemp (new PointCloud<PointTN>);
     *cnowtemp = *cnow;
-    roo.searchNeighborsKdTree(cnowtemp, cobj, 0.04, 20);
+    roo.searchNeighborsKdTree(cnowtemp, cobj, 0.02, 11);
     *cobj += *cnowtemp;
 
     // Publicando o resultado atual para visualizacao
@@ -314,29 +311,21 @@ int main(int argc, char **argv)
     msg.header.stamp = ros::Time::now();
     pub.publish(msg);
 
-    //        // Calcula a pose da camera e escreve no NVM
-    //        ROS_INFO("Escrevendo no NVM ...");
-    //        Matrix4f Tcam = Matrix4f::Identity();
-    //        Tcam.block<3,1>(0, 3) = t_off_lc;
-    //        Tcam = Tobj*Tcam;
-    //        C = Tcam.block<3,1>(0, 3);
-    //        q = Tcam.block<3,3>(0, 0).transpose();
-    //        linhas_nvm.push_back(pc.escreve_linha_imagem(f, nomes_imagens[i], C, q));
-    //        pc.compileFinalNVM(linhas_nvm);
+    // Calcula a pose da camera e escreve no SFM
+    ROS_INFO("Escrevendo no SFM ...");
+    Matrix4f Tcam = Matrix4f::Identity();
+    Tcam.block<3,1>(0, 3) = pc.gettCam();
+    Tcam = Tobj*Tcam;
+    Rcam = Tcam.block<3,3>(0, 0).inverse();
+    tcam = -Tcam.block<3,1>(0, 3);
+    linhas_sfm.push_back(pc.escreve_linha_sfm(nomes_imagens[i], Rcam, tcam));
+    pc.compileFinalSFM(linhas_sfm);
 
     // Atualiza as referencias e parte para a proxima aquisicao
     delete cb;
     Tref = Tobj;
     imnow.copyTo(imref);
   }
-
-  //    // Filtrando novamente objeto final
-  //    ROS_INFO("Filtrando e salvando nuvem de objeto ...");
-  //    StatisticalOutlierRemoval<PointTN> sor;
-  //    sor.setMeanK(10);
-  //    sor.setStddevMulThresh(2);
-  //    sor.setInputCloud(cobj);
-  //    sor.filter(*cobj);
 
   // Publicando o resultado atual para visualizacao
   toROSMsg(*cobj, msg);
@@ -346,7 +335,6 @@ int main(int argc, char **argv)
 
   // Salvando a nuvem final do objeto
   savePLYFileBinary<PointTN>(nome_objeto_final, *cobj);
-  //    pc.compileFinalNVM(linhas_nvm);
 
   ROS_INFO("Processo finalizado.");
 

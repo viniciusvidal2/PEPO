@@ -1,5 +1,5 @@
 <launch>
-<arg name="pasta" default="objetos/Dados_PEPO/aquisicao4"/>
+<arg name="pasta" default="objetos/onix/aquisicao1"/>
 <arg name="visualizar" default="true"/>
 
 <node name="acc_obj_node" pkg="fog" type="acc_obj_node" output="screen">

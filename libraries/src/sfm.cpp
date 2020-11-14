@@ -194,8 +194,8 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
       circle(im1, Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
       circle(im2, Point(best_kpsrc[i].pt.x, best_kpsrc[i].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
     }
-//    imshow("targetc", im1);
-//    imshow("sourcec", im2);
+    imshow("targetc", im1);
+    imshow("sourcec", im2);
     imwrite(pasta_src+"im_tgt.png", im1);
     imwrite(pasta_src+"im_src.png", im2);
     waitKey();
@@ -280,7 +280,7 @@ void SFM::obter_transformacao_final_sfm(){
   Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
   // Transformacao final (em translacao)
   this->estimar_escala_translacao();
-  Tsvd.block<3,1>(0, 3) = trel;
+//  Tsvd.block<3,1>(0, 3) = trel;
 
   // Transformar a nuvem source com a transformacao estimada
 //  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd);
@@ -403,6 +403,29 @@ void SFM::estimar_escala_translacao(){
   }
   savePLYFileBinary(pasta_src+"kpts_src.ply", *teste);
   teste->clear();
+
+  // A partir das correspondencias, pega por ransac a transformacao 3D de uma vez
+  pcl::Correspondences corresp;
+  for(size_t i=0; i<corresp_tgt->size(); i++){
+    pcl::Correspondence corr;
+    corr.index_query = i;
+    corr.index_match = i;
+    corresp.push_back(corr);
+  }
+
+  /// RANSAC BASED Correspondence Rejection
+  pcl::CorrespondencesConstPtr correspond = boost::make_shared< pcl::Correspondences >(corresp);
+
+  pcl::Correspondences corr;
+  pcl::registration::CorrespondenceRejectorSampleConsensus< PointT > Ransac_based_Rejection;
+  Ransac_based_Rejection.setInputSource(corresp_src);
+  Ransac_based_Rejection.setInputTarget(corresp_tgt);
+  double sac_threshold = 0.5;// default PCL value..can be changed and may slightly affect the number of correspondences
+  Ransac_based_Rejection.setInlierThreshold(sac_threshold);
+  Ransac_based_Rejection.setInputCorrespondences(correspond);
+  Ransac_based_Rejection.getCorrespondences(corr);
+
+  Tsvd = Ransac_based_Rejection.getBestTransformation();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m){
@@ -509,7 +532,7 @@ Matrix4f SFM::icp(float vs, int its){
   PointCloud<PointTN>::Ptr ctgt (new PointCloud<PointTN>);
   if(debug)
     cout << "\nTirando FOV ..." << endl;
-  float thresh = 80.0/2.0;
+  float thresh = 50.0/2.0;
   float d;
   for(size_t i=0; i<cloud_tgt->size(); i++){
     Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
@@ -526,40 +549,48 @@ Matrix4f SFM::icp(float vs, int its){
       csrc->push_back((*cloud_src)[i]);
   }
   transformPointCloudWithNormals(*csrc, *csrc, Tsvd);
+  transformPointCloudWithNormals(*cloud_src, *cloud_src, Tsvd);
 
   Matrix4f Ticp = Matrix4f::Identity();
   vs = vs/100.0;
   if(debug)
     cout << "\nPerformando ICP ..." << endl;
   // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
-  PointCloud<PointTN>::Ptr tgttemp(new PointCloud<PointTN>);
-  PointCloud<PointTN>::Ptr srctemp(new PointCloud<PointTN>);
+  PointCloud<PointXYZRGBA>::Ptr tgttemp(new PointCloud<PointXYZRGBA>);
+  PointCloud<PointXYZRGBA>::Ptr srctemp(new PointCloud<PointXYZRGBA>);
+  copyPointCloud(*cloud_tgt, *tgttemp);
+  copyPointCloud(*cloud_src, *srctemp);
   if(vs > 0){
-    VoxelGrid<PointTN> voxel;
+    VoxelGrid<PointXYZRGBA> voxel;
     voxel.setLeafSize(vs, vs, vs);
-    voxel.setInputCloud(ctgt);
+    voxel.setInputCloud(tgttemp);
     voxel.filter(*tgttemp);
-    voxel.setInputCloud(csrc);
+    voxel.setInputCloud(srctemp);
     voxel.filter(*srctemp);
-  } else {
-    *tgttemp = *ctgt;
-    *srctemp = *csrc;
   }
+  StatisticalOutlierRemoval<PointXYZRGBA> sor;
+  sor.setMeanK(30);
+  sor.setStddevMulThresh(2);
+  sor.setNegative(false);
+  sor.setInputCloud(srctemp);
+  sor.filter(*srctemp);
+  sor.setInputCloud(tgttemp);
+  sor.filter(*tgttemp);
   savePLYFileBinary<PointTN>(pasta_src+"src_antes_icp.ply", *csrc);
 
   // Criando o otimizador de ICP comum
-  GeneralizedIterativeClosestPoint<PointTN, PointTN> icp;
+  GeneralizedIterativeClosestPoint6D icp;
 //  IterativeClosestPoint<PointTN, PointTN> icp;
   icp.setUseReciprocalCorrespondences(true);
   icp.setInputTarget(tgttemp);
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-9);
-  icp.setEuclideanFitnessEpsilon(1*1e-12);
-  icp.setMaxCorrespondenceDistance(0.1);
+  icp.setTransformationEpsilon(1*1e-10);
+  icp.setEuclideanFitnessEpsilon(1*1e-13);
+  icp.setMaxCorrespondenceDistance(0.04);
   // Alinhando
-  PointCloud<PointTN> dummy;
+  PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());
   // Obtendo a transformacao otimizada e aplicando
   if(icp.hasConverged()){
@@ -574,7 +605,34 @@ Matrix4f SFM::icp(float vs, int its){
   return Ticp;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::somar_spaces(Matrix4f T){
+void SFM::somar_spaces(Matrix4f T, float radius, int rate){
+  // Trazer nuvem source finalmente para a posicao
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, T);
+  // Iniciar kdtree de busca
+  KdTreeFLANN<PointTN> kdtree;
+  kdtree.setInputCloud(cloud_tgt);
+  vector<int> pointIdxRadiusSearch;
+  vector<float> pointRadiusSquaredDistance;
+  // Nuvem de pontos de indices bons
+  PointIndices::Ptr indices (new PointIndices);
+  // Retirando indices NaN se existirem
+  vector<int> indicesNaN;
+  removeNaNFromPointCloud(*cloud_src, *cloud_src, indicesNaN);
+  removeNaNFromPointCloud(*cloud_tgt, *cloud_tgt, indicesNaN);
+  // Para cada ponto, se ja houver vizinhos, nao seguir
+  for(size_t i=0; i<cloud_src->size(); i++){
+    if(kdtree.radiusSearch(cloud_src->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate)
+      indices->indices.emplace_back(i);
+  }
+  // Filtrar na nuvem now so os indices que estao sem vizinhos na obj
+  ExtractIndices<PointTN> extract;
+  extract.setInputCloud(cloud_src);
+  extract.setIndices(indices);
+  extract.setNegative(false);
+  extract.filter(*cloud_src);
 
+  // Somar as duas nuvens e salvar resultado
+  *cloud_tgt += *cloud_src;
+  savePLYFileBinary<PointTN>(pasta_src+"registro_final.ply", *cloud_tgt);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

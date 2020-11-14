@@ -44,12 +44,14 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/registration/icp.h>
 #include <pcl/registration/gicp.h>
+#include <pcl/registration/gicp6d.h>
 #include <pcl/registration/transformation_estimation_svd.h>
 #include <pcl/registration/transformation_estimation_point_to_plane_lls.h>
 #include <pcl/keypoints/harris_3d.h>
 #include <pcl/features/fpfh.h>
 #include <pcl/registration/correspondence_estimation.h>
 #include <pcl/registration/correspondence_rejection_distance.h>
+#include <pcl/registration/correspondence_rejection_sample_consensus.h>
 #include <pcl/point_types_conversion.h>
 #include <pcl/octree/octree_search.h>
 
@@ -99,7 +101,7 @@ public:
   void set_debug(bool b);
   void obter_transformacao_final_sfm();
   Matrix4f icp(float vs, int its);
-  void somar_spaces(Matrix4f T);
+  void somar_spaces(Matrix4f T, float radius, int rate);
 
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);

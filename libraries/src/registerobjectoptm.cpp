@@ -81,8 +81,8 @@ Matrix4f RegisterObjectOptm::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<Point
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-9);
-  icp.setEuclideanFitnessEpsilon(1*1e-12);
+  icp.setTransformationEpsilon(1*1e-8);
+  icp.setEuclideanFitnessEpsilon(1*1e-11);
   icp.setMaxCorrespondenceDistance(vs*3);
   // Alinhando
   PointCloud<PointTN> dummy;
@@ -100,17 +100,17 @@ Matrix4f RegisterObjectOptm::gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<Po
   // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
   PointCloud<PointXYZRGBA>::Ptr tgttemp(new PointCloud<PointXYZRGBA>);
   PointCloud<PointXYZRGBA>::Ptr srctemp(new PointCloud<PointXYZRGBA>);
-  tgttemp->resize(ctgt->size()); srctemp->resize(csrc->size());
-#pragma omp parallel for
-  for(size_t i=0; i<ctgt->size(); i++){
-    tgttemp->points[i].x = ctgt->points[i].x; tgttemp->points[i].y = ctgt->points[i].y; tgttemp->points[i].z = ctgt->points[i].z;
-    tgttemp->points[i].r = ctgt->points[i].r; tgttemp->points[i].b = ctgt->points[i].b; tgttemp->points[i].g = ctgt->points[i].g;
-  }
-#pragma omp parallel for
-  for(size_t i=0; i<csrc->size(); i++){
-    srctemp->points[i].x = csrc->points[i].x; srctemp->points[i].y = csrc->points[i].y; srctemp->points[i].z = csrc->points[i].z;
-    srctemp->points[i].r = csrc->points[i].r; srctemp->points[i].b = csrc->points[i].b; srctemp->points[i].g = csrc->points[i].g;
-  }
+//  tgttemp->resize(ctgt->size()); srctemp->resize(csrc->size());
+//#pragma omp parallel for
+//  for(size_t i=0; i<ctgt->size(); i++){
+//    tgttemp->points[i].x = ctgt->points[i].x; tgttemp->points[i].y = ctgt->points[i].y; tgttemp->points[i].z = ctgt->points[i].z;
+//    tgttemp->points[i].r = ctgt->points[i].r; tgttemp->points[i].b = ctgt->points[i].b; tgttemp->points[i].g = ctgt->points[i].g;
+//  }
+//#pragma omp parallel for
+//  for(size_t i=0; i<csrc->size(); i++){
+//    srctemp->points[i].x = csrc->points[i].x; srctemp->points[i].y = csrc->points[i].y; srctemp->points[i].z = csrc->points[i].z;
+//    srctemp->points[i].r = csrc->points[i].r; srctemp->points[i].b = csrc->points[i].b; srctemp->points[i].g = csrc->points[i].g;
+//  }
   copyPointCloud(*ctgt, *tgttemp);
   copyPointCloud(*csrc, *srctemp);
   VoxelGrid<PointXYZRGBA> voxel;
@@ -135,9 +135,9 @@ Matrix4f RegisterObjectOptm::gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<Po
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-9);
-  icp.setEuclideanFitnessEpsilon(1*1e-12);
-  icp.setMaxCorrespondenceDistance(vs*3);
+  icp.setTransformationEpsilon(1*1e-10);
+  icp.setEuclideanFitnessEpsilon(1*1e-13);
+  icp.setMaxCorrespondenceDistance(vs*15);
   // Alinhando
   PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());
@@ -191,30 +191,58 @@ void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, Poin
     }
   }
 
+  /// Filtrar os matches por matriz fundamental ///
+
+  // Converter os pontos para o formato certo
+  vector<Point2f> ppref(good_matches.size()), ppnow(good_matches.size());
+#pragma omp parallel for
   for(int i=0; i<good_matches.size(); i++){
-    int r = rand()%255, b = rand()%255, g = rand()%255;
-    circle(imref, Point(kpref[good_matches[i].trainIdx].pt.x, kpref[good_matches[i].trainIdx].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
-    circle(imnow, Point(kpnow[good_matches[i].queryIdx].pt.x, kpnow[good_matches[i].queryIdx].pt.y), 8, Scalar(r, g, b), FILLED, LINE_8);
+    ppref[i] = kpref[good_matches[i].trainIdx].pt;
+    ppnow[i] = kpnow[good_matches[i].queryIdx].pt;
   }
-//  imshow("targetc", imref);
-//  imshow("sourcec", imnow);
+  // Calcular matriz fundamental
+  Mat F = findFundamentalMat(ppnow, ppref);
+  // Calcular pontos que ficam por conferencia da matriz F
+  Matrix3f F_;
+  cv2eigen(F, F_);
+  vector<Point2f> tempt, temps;
+  for(int i=0; i<ppnow.size(); i++){
+    Vector3f pt{ppref[i].x, ppref[i].y, 1}, ps = {ppnow[i].x, ppnow[i].y, 1};
+    MatrixXf erro = pt.transpose()*F_*ps;
+    if(abs(erro(0, 0)) < 0.2){
+      tempt.push_back(ppref[i]); temps.push_back(ppnow[i]);
+    }
+  }
+  ppnow = temps; ppref = tempt;
+  /////////////////////////////////////////////////
+
+//  Mat imnow2, imref2;
+//  imnow.copyTo(imnow2);
+//  imref.copyTo(imref2);
+//  for(int i=0; i<ppref.size(); i++){
+//    int r = rand()%255, b = rand()%255, g = rand()%255;
+//    circle(imref2, Point(ppref[i].x, ppref[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
+//    circle(imnow2, Point(ppnow[i].x, ppnow[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
+//  }
+//  imshow("targetc", imref2);
+//  imshow("sourcec", imnow2);
 //  waitKey(0);
 
   // Dados intrinsecos da camera
   float fx = 1427.1, fy = 1449.4, cx = 987.9, cy = 579.4;
 
   // Se houveram matches suficientes
-  if(good_matches.size() > 6){
+  if(ppref.size() > 6){
     // Aloca espaco para nuvens de saida de match 3D
-    cmr->resize(good_matches.size()); cmn->resize(good_matches.size());
+    cmr->resize(ppref.size()); cmn->resize(ppref.size());
     // Calcular pontos 3D de cada match em now
-    vector<int> istherepoint_now(good_matches.size());
+    vector<int> istherepoint_now(ppnow.size());
     octree::OctreePointCloudSearch<PointTN> oct(0.02);
     oct.setInputCloud(cnow);
     oct.addPointsFromInputCloud();
 #pragma omp parallel for
-    for(int i=0; i<good_matches.size(); i++){
-      float u = kpnow[good_matches[i].queryIdx].pt.x, v = kpnow[good_matches[i].queryIdx].pt.y;
+    for(int i=0; i<ppnow.size(); i++){
+      float u = ppnow[i].x, v = ppnow[i].y;
       Vector3f dir;
       dir << (u - cx)/fx, (v - cy)/fy, 1;
       octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector align;
@@ -236,13 +264,13 @@ void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, Poin
     }
 
     // Calcular pontos 3D de cada match em ref
-    vector<int> istherepoint_ref(good_matches.size());
+    vector<int> istherepoint_ref(ppref.size());
     octree::OctreePointCloudSearch<PointTN> oct2(0.02);
     oct2.setInputCloud(cref);
     oct2.addPointsFromInputCloud();
 #pragma omp parallel for
-    for(int i=0; i<good_matches.size(); i++){
-      float u = kpref[good_matches[i].trainIdx].pt.x, v = kpref[good_matches[i].trainIdx].pt.y;
+    for(int i=0; i<ppref.size(); i++){
+      float u = ppref[i].x, v = ppref[i].y;
       Vector3f dir;
       dir << (u - cx)/fx, (v - cy)/fy, 1;
       octree::OctreePointCloudSearch<PointTN>::AlignedPointTVector align;

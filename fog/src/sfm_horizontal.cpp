@@ -34,9 +34,9 @@ int main(int argc, char **argv)
   vector<string> linhas_tgt, linhas_src;
   string linha;
   int contador_linhas = 0;
-  vector<int> linhas_horizontal{4, 9, 12, 17, 20, 25, 28, 33, 36, 41, 44, 49};
+  vector<int> linhas_horizontal{4, 9, 12, 17, 20, 25, 28, 33, 36, 41, 44, 49, 52, 57, 60};
   // Lendo pasta 1
-  string arquivo_sfm = pasta_tgt + "cameras.sfm";
+  string arquivo_sfm = pasta_tgt + "cameras_ok.sfm";
   ifstream sfm_tgt(arquivo_sfm);
   if (sfm_tgt.is_open()) {
       while (getline(sfm_tgt, linha)) {
@@ -49,7 +49,7 @@ int main(int argc, char **argv)
   }
   sfm_tgt.close();
   // Lendo pasta 2
-  arquivo_sfm = pasta_src + "cameras.sfm";
+  arquivo_sfm = pasta_src + "cameras_ok.sfm";
   contador_linhas = 0;
   ifstream sfm_src(arquivo_sfm);
   if (sfm_src.is_open()) {
@@ -86,8 +86,9 @@ int main(int argc, char **argv)
   ///
   ROS_INFO("Fechando com ICP ...");
   ros::Time tempo = ros::Time::now();
-  Matrix4f Ticp = sfm.icp(5.0, 100);
-  sfm.somar_spaces(Ticp);
+  Matrix4f Ticp = sfm.icp(4.0, 100);
+  ROS_INFO("Somando spaces ...");
+  sfm.somar_spaces(Ticp, 0.10, 200);
   ROS_WARN("Tempo para o ICP e soma das nuvens: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 
   ROS_INFO("Processo terminado.");
