@@ -271,7 +271,7 @@ int main(int argc, char **argv)
 
       // Refina a transformacao por ICP com poucas iteracoes
       ROS_INFO("Refinando registro por ICP ...");
-      Ticp = roo.gicp6d(cobj, cnow, 0.02, 200);
+      Ticp = roo.gicp6d(cobj, cnow, 0.04, 200);
     } else {
       ROS_INFO("Nao encontrou match por features, refinando registro por BSHOT e ICP ...");
       // Inicia nuvem source do bshot
@@ -280,7 +280,7 @@ int main(int argc, char **argv)
       ROS_INFO("Calculating normals BSHOT ...");
       cb->calculate_normals (60);
       ROS_INFO("Calculating voxelgrid BSHOT...");
-      cb->calculate_voxel_grid_keypoints (0.03);
+      cb->calculate_voxel_grid_keypoints (0.05);
       ROS_INFO("Calculating SHOT descriptors ...");
       cb->calculate_SHOT (0.10);
       ROS_INFO("Calculating BSHOT descriptors ...");
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
       Tapp = Tbshot;
       // Refina a transformacao por ICP com mais iteracoes
       ROS_INFO("Refinando registro por ICP ...");
-      Ticp = roo.gicp6d(cobj, cnow, 0.02, 200);
+      Ticp = roo.gicp6d(cobj, cnow, 0.04, 200);
     }
 
     transformPointCloudWithNormals<PointTN>(*cnow, *cnow, Ticp);
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
 
     PointCloud<PointTN>::Ptr cnowtemp (new PointCloud<PointTN>);
     *cnowtemp = *cnow;
-    roo.searchNeighborsKdTree(cnowtemp, cobj, 0.02, 11);
+    roo.searchNeighborsKdTree(cnowtemp, cobj, 0.05, 11);
     *cobj += *cnowtemp;
 
     // Publicando o resultado atual para visualizacao
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
     // Calcula a pose da camera e escreve no SFM
     ROS_INFO("Escrevendo no SFM ...");
     Matrix4f Tcam = Matrix4f::Identity();
-    Tcam.block<3,1>(0, 3) = pc.gettCam();
+    Tcam.block<3,1>(0, 3) = -pc.gettCam(); // Aqui e negativo! conferido no mart
     Tcam = Tobj*Tcam;
     Rcam = Tcam.block<3,3>(0, 0).inverse();
     tcam = -Tcam.block<3,1>(0, 3);

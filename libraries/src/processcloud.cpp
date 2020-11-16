@@ -771,7 +771,7 @@ void ProcessCloud::filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, flo
   /// Latitude: 0 - 180 / Longitude: 0 - 360
 
   // Resolucao em graus
-  float step_deg = 0.12; // [DEGREES]
+  float step_deg = 0.07; // [DEGREES]
   int nlat = lat_fov/step_deg, nlon = lon_fov/step_deg;
   // Nuvem de pontos com a resolucao dos angulos para ray casting
   PointCloud<PointT>::Ptr rc (new PointCloud<PointT>);
@@ -794,6 +794,48 @@ void ProcessCloud::filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, flo
         oct.getIntersectedVoxelCenters(Vector3f::Zero(), d.normalized(), align_pts, 1);
         if(align_pts.size() > 0){
           PointT p = align_pts[0];
+          vector<int> k_ind;
+          vector<float> k_dists;
+          oct.nearestKSearch(p, 1, k_ind, k_dists);
+          if(k_ind.size() > 0)
+            rc->push_back((*in)[k_ind[0]]);
+        }
+      }
+    }
+  }
+  // Renova nuvem agora filtrada
+  *in = *rc;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void ProcessCloud::filterRayCasting(PointCloud<PointTN>::Ptr in, float lat_c, float lon_c, float lat_fov, float lon_fov){
+  /// O angulo de longitude roda no sentido da mao direita sobre o eixo Y, comecando de Z = 1
+  /// O angulo de latitude, supondo latitude 0, roda no sentido da mao direita sobre o eixo Z, com inicio no Y = 1
+  /// Latitude: 0 - 180 / Longitude: 0 - 360
+
+  // Resolucao em graus
+  float step_deg = 0.15; // [DEGREES]
+  int nlat = lat_fov/step_deg, nlon = lon_fov/step_deg;
+  // Nuvem de pontos com a resolucao dos angulos para ray casting
+  PointCloud<PointTN>::Ptr rc (new PointCloud<PointTN>);
+  OctreePointCloudSearch<PointTN> oct(0.01);
+  OctreePointCloudSearch<PointTN>::AlignedPointTVector align_pts;
+  oct.setInputCloud(in);
+  oct.addPointsFromInputCloud();
+  // Para cada direcao
+  for(int i=0; i<nlat; i++){
+    for(int j=0; j<nlon; j++){
+      float lat = lat_c - lat_fov/2 + step_deg*i, lon = lon_c - lon_fov/2 + step_deg*j;
+      if(lon > 360) lon -= 360;
+      if(lon <   0) lon += 360;
+      // Se dentro dos limites
+      if(lat >=0 && lat < 180 && lon >=0 && lon < 360){
+        float la = DEG2RAD(lat), lo = DEG2RAD(lon);
+        float x = sin(la)*sin(lo), y = cos(la), z = sin(la)*cos(lo);
+        Vector3f d{x, y, z};
+        // Buscar na nuvem onde isso vai bater
+        oct.getIntersectedVoxelCenters(Vector3f::Zero(), d.normalized(), align_pts, 1);
+        if(align_pts.size() > 0){
+          PointTN p = align_pts[0];
           vector<int> k_ind;
           vector<float> k_dists;
           oct.nearestKSearch(p, 1, k_ind, k_dists);

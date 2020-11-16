@@ -111,6 +111,7 @@ public:
   Vector3f gettCam();
 
   void filterRayCasting(PointCloud<PointT>::Ptr in, float lat_c, float lon_c, float lat_fov, float lon_fov);
+  void filterRayCasting(PointCloud<PointTN>::Ptr in, float lat_c, float lon_c, float lat_fov, float lon_fov);
   void cleanMisreadPoints(PointCloud<PointT>::Ptr cloud);
 
 private:

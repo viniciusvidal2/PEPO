@@ -101,7 +101,10 @@ public:
   void set_debug(bool b);
   void obter_transformacao_final_sfm();
   Matrix4f icp(float vs, int its);
-  void somar_spaces(Matrix4f T, float radius, int rate);
+  void somar_spaces(float radius, int rate);
+
+  void set_clouds(PointCloud<PointTN>::Ptr ct, PointCloud<PointTN>::Ptr cs);
+  void get_cloud_result(PointCloud<PointTN>::Ptr cr);
 
 private:
   void filterMatchesLineCoeff(vector<DMatch> &matches, vector<KeyPoint> kpref, vector<KeyPoint> kpnow, float width, float n);
@@ -132,7 +135,8 @@ private:
   vector<string> nomes_nuvens;
   PointCloud<PointTN>::Ptr cloud_src;
   PointCloud<PointTN>::Ptr cloud_tgt;
-  Matrix4f Tsvd;
+  PointCloud<PointTN> result;
+  Matrix4f Tsvd, Ticp, Tfinal;
 
 };
 

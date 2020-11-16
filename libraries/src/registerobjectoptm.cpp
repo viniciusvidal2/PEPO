@@ -36,7 +36,7 @@ void RegisterObjectOptm::readCloudAndPreProcess(string name, PointCloud<PointT>:
   voxel.setInputCloud(cin);
   //    voxel.filter(*cin);
   pass.setInputCloud(cin);
-  pass.filter(*cin);
+//  pass.filter(*cin);
   sor.setInputCloud(cin);
   //    sor.filter(*cin);
   //    // Passando polinomio pra suavizar a parada
@@ -135,9 +135,9 @@ Matrix4f RegisterObjectOptm::gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<Po
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-10);
-  icp.setEuclideanFitnessEpsilon(1*1e-13);
-  icp.setMaxCorrespondenceDistance(vs*15);
+  icp.setTransformationEpsilon(1*1e-6);
+  icp.setEuclideanFitnessEpsilon(1*1e-6);
+  icp.setMaxCorrespondenceDistance(vs*3);
   // Alinhando
   PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());

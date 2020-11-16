@@ -268,16 +268,16 @@ void SFM::calcular_pose_relativa(){
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::obter_transformacao_final_sfm(){
   // Lendo as nuvens correspondentes
-  this->ler_nuvens_correspondentes();
+//  this->ler_nuvens_correspondentes();
 
   if(debug)
     cout << "\nAplicando transformacao final ..." << endl;
   // Calcular rotacao relativa entre o frame src e tgt, src -> tgt
   // Conta necessaria: 2_R^1 = inv(in_R^2)*in_R^1
-  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
+//  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
 
-  // Transformacao final (so rotacao)
-  Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
+//  // Transformacao final (so rotacao)
+//  Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
   // Transformacao final (em translacao)
   this->estimar_escala_translacao();
 //  Tsvd.block<3,1>(0, 3) = trel;
@@ -551,7 +551,7 @@ Matrix4f SFM::icp(float vs, int its){
   transformPointCloudWithNormals(*csrc, *csrc, Tsvd);
   transformPointCloudWithNormals(*cloud_src, *cloud_src, Tsvd);
 
-  Matrix4f Ticp = Matrix4f::Identity();
+  Ticp = Matrix4f::Identity();
   vs = vs/100.0;
   if(debug)
     cout << "\nPerformando ICP ..." << endl;
@@ -586,9 +586,9 @@ Matrix4f SFM::icp(float vs, int its){
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-10);
-  icp.setEuclideanFitnessEpsilon(1*1e-13);
-  icp.setMaxCorrespondenceDistance(0.04);
+  icp.setTransformationEpsilon(1*1e-6);
+  icp.setEuclideanFitnessEpsilon(1*1e-6);
+  icp.setMaxCorrespondenceDistance(0.15);
   // Alinhando
   PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());
@@ -597,42 +597,63 @@ Matrix4f SFM::icp(float vs, int its){
     Ticp = icp.getFinalTransformation();
     cout << "\nICP convergiu !!!" << endl;
   }
+
+  // Trazer nuvem source finalmente para a posicao
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Ticp);
   transformPointCloudWithNormals<PointTN>(*csrc, *csrc, Ticp);
 
   savePLYFileBinary<PointTN>(pasta_src+"src_final.ply", *csrc);
   savePLYFileBinary<PointTN>(pasta_src+"tgt_final.ply", *ctgt);
 
-  return Ticp;
+  Tfinal = Ticp*Tsvd;
+
+
+
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Ticp.inverse());
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd.inverse());
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tfinal);
+
+
+
+  return Tfinal;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
-void SFM::somar_spaces(Matrix4f T, float radius, int rate){
-  // Trazer nuvem source finalmente para a posicao
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, T);
-  // Iniciar kdtree de busca
-  KdTreeFLANN<PointTN> kdtree;
-  kdtree.setInputCloud(cloud_tgt);
-  vector<int> pointIdxRadiusSearch;
-  vector<float> pointRadiusSquaredDistance;
-  // Nuvem de pontos de indices bons
-  PointIndices::Ptr indices (new PointIndices);
-  // Retirando indices NaN se existirem
-  vector<int> indicesNaN;
-  removeNaNFromPointCloud(*cloud_src, *cloud_src, indicesNaN);
-  removeNaNFromPointCloud(*cloud_tgt, *cloud_tgt, indicesNaN);
-  // Para cada ponto, se ja houver vizinhos, nao seguir
-  for(size_t i=0; i<cloud_src->size(); i++){
-    if(kdtree.radiusSearch(cloud_src->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate)
-      indices->indices.emplace_back(i);
-  }
-  // Filtrar na nuvem now so os indices que estao sem vizinhos na obj
-  ExtractIndices<PointTN> extract;
-  extract.setInputCloud(cloud_src);
-  extract.setIndices(indices);
-  extract.setNegative(false);
-  extract.filter(*cloud_src);
+void SFM::somar_spaces(float radius, int rate){
+//  // Iniciar kdtree de busca
+//  KdTreeFLANN<PointTN> kdtree;
+//  kdtree.setInputCloud(cloud_tgt);
+//  vector<int> pointIdxRadiusSearch;
+//  vector<float> pointRadiusSquaredDistance;
+//  // Nuvem de pontos de indices bons
+//  PointIndices::Ptr indices (new PointIndices);
+//  // Retirando indices NaN se existirem
+//  vector<int> indicesNaN;
+//  removeNaNFromPointCloud(*cloud_src, *cloud_src, indicesNaN);
+//  removeNaNFromPointCloud(*cloud_tgt, *cloud_tgt, indicesNaN);
+//  // Para cada ponto, se ja houver vizinhos, nao seguir
+//  for(size_t i=0; i<cloud_src->size(); i++){
+//    if(kdtree.radiusSearch(cloud_src->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate)
+//      indices->indices.emplace_back(i);
+//  }
+//  // Filtrar na nuvem now so os indices que estao sem vizinhos na obj
+//  ExtractIndices<PointTN> extract;
+//  extract.setInputCloud(cloud_src);
+//  extract.setIndices(indices);
+//  extract.setNegative(false);
+//  extract.filter(*cloud_src);
 
   // Somar as duas nuvens e salvar resultado
-  *cloud_tgt += *cloud_src;
-  savePLYFileBinary<PointTN>(pasta_src+"registro_final.ply", *cloud_tgt);
+  result = *cloud_tgt + *cloud_src;
+//  *cloud_tgt += *cloud_src;
+  savePLYFileBinary<PointTN>(pasta_src+"registro_final.ply", result);
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void SFM::set_clouds(PointCloud<PointTN>::Ptr ct, PointCloud<PointTN>::Ptr cs){
+  copyPointCloud(*cs, *cloud_src);
+  copyPointCloud(*ct, *cloud_tgt);
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+void SFM::get_cloud_result(PointCloud<PointTN>::Ptr cr){
+  *cr = result;
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

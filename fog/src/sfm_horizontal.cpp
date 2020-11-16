@@ -1,8 +1,29 @@
 #include <ros/ros.h>
 #include <string>
 #include "../../libraries/include/sfm.h"
+#include "../../libraries/include/processcloud.h"
 
 using namespace std;
+
+void escrever_t_final(string ps, string pt, Matrix4f T){
+  // Onde salvar
+  string destino;
+  char* home;
+  home = getenv("HOME");
+  destino = string(home) + "/Desktop/"+ ps + "/transformada_inicial.txt";
+  ofstream ts(destino);
+  if(ts.is_open()){
+    ts << ps + " ";
+    ts << pt + " ";
+    for(int i=0; i<4; i++){
+      for(int j=0; j<4; j++){
+        ts << std::to_string(T(i, j)) + " ";
+      }
+    }
+    ts << "\n";
+  }
+  ts.close();
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
@@ -27,6 +48,7 @@ int main(int argc, char **argv)
   ///
   SFM sfm(pasta_src, pasta_tgt);
   sfm.set_debug(true);
+  ProcessCloud pc(pasta_src);
 
   /// Iniciar leitura das imagens da vista anterior e da atual
   ///
@@ -63,6 +85,14 @@ int main(int argc, char **argv)
   }
   sfm_src.close();
   // Nomes das imagens e dados
+  ROS_INFO("Lendo tudo e reduzindo dados ...");
+  PointCloud<PointTN>::Ptr cloud_tgt (new PointCloud<PointTN>), cloud_src (new PointCloud<PointTN>);
+  loadPLYFile<PointTN>(pasta_tgt+"acumulada.ply", *cloud_tgt);
+  loadPLYFile<PointTN>(pasta_src+"acumulada.ply", *cloud_src);
+  pc.filterRayCasting(cloud_tgt, 90.0, 180.0, 180.0, 360.0);
+  pc.filterRayCasting(cloud_src, 90.0, 180.0, 180.0, 360.0);
+  sfm.set_clouds(cloud_tgt, cloud_src);
+
   sfm.obter_dados(linhas_src, linhas_tgt);
 
   /// Calcular matriz de features e matches entre as imagens
@@ -86,10 +116,20 @@ int main(int argc, char **argv)
   ///
   ROS_INFO("Fechando com ICP ...");
   ros::Time tempo = ros::Time::now();
-  Matrix4f Ticp = sfm.icp(4.0, 100);
+  Matrix4f Tfinal = sfm.icp(4.0, 100);
   ROS_INFO("Somando spaces ...");
-  sfm.somar_spaces(Ticp, 0.10, 200);
+  sfm.somar_spaces(0.10, 40);
   ROS_WARN("Tempo para o ICP e soma das nuvens: %.2f segundos.", (ros::Time::now() - tempo).toSec());
+
+  loadPLYFile<PointTN>(pasta_src+"acumulada.ply", *cloud_src);
+  transformPointCloud<PointTN>(*cloud_src, *cloud_src, Tfinal);
+  savePLYFileBinary<PointTN>(pasta_src+"sefuder.ply", *cloud_src);
+
+  /// Escrever arquivo com a transformada final
+  ///
+  n_.param<string>("pasta_src", pasta_src, "src");
+  n_.param<string>("pasta_tgt", pasta_tgt, "tgt");
+  escrever_t_final(pasta_src, pasta_tgt, Tfinal);
 
   ROS_INFO("Processo terminado.");
   ros::spinOnce();
