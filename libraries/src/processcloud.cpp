@@ -813,7 +813,7 @@ void ProcessCloud::filterRayCasting(PointCloud<PointTN>::Ptr in, float lat_c, fl
   /// Latitude: 0 - 180 / Longitude: 0 - 360
 
   // Resolucao em graus
-  float step_deg = 0.15; // [DEGREES]
+  float step_deg = 0.07; // [DEGREES]
   int nlat = lat_fov/step_deg, nlon = lon_fov/step_deg;
   // Nuvem de pontos com a resolucao dos angulos para ray casting
   PointCloud<PointTN>::Ptr rc (new PointCloud<PointTN>);

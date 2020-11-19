@@ -34,10 +34,10 @@ include_directories(${OpenMP_INCLUDE_DIRS})
 
 catkin_package(CATKIN_DEPENDS DEPENDS roscpp cv_bridge sensor_msgs std_msgs nav_msgs pcl_ros tf2_ros pcl_conversions message_filters)
 
-add_executable(acc_space_node src/acc_space2.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
-target_compile_options(acc_space_node PRIVATE ${OpenMP_FLAGS})
-add_dependencies(acc_space_node ${catkin_EXPORTED_TARGETS})
-target_link_libraries(acc_space_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
+#add_executable(acc_space_node src/acc_space2.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
+#target_compile_options(acc_space_node PRIVATE ${OpenMP_FLAGS})
+#add_dependencies(acc_space_node ${catkin_EXPORTED_TARGETS})
+#target_link_libraries(acc_space_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
 
 #add_executable(planta_baixa_node src/planta_baixa.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
 #target_compile_options(planta_baixa_node PRIVATE ${OpenMP_FLAGS})
@@ -49,12 +49,17 @@ target_link_libraries(acc_space_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${Open
 #add_dependencies(sfm_node ${catkin_EXPORTED_TARGETS})
 #target_link_libraries(sfm_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
 
+add_executable(register_total src/register_total.cpp ../libraries/src/registerobjectoptm.cpp)
+target_compile_options(register_total PRIVATE ${OpenMP_FLAGS})
+add_dependencies(register_total ${catkin_EXPORTED_TARGETS})
+target_link_libraries(register_total ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
+
 #add_executable(imagem_virtual src/imagem_virtual.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
 #target_compile_options(imagem_virtual PRIVATE ${OpenMP_FLAGS})
 #add_dependencies(imagem_virtual ${catkin_EXPORTED_TARGETS})
 #target_link_libraries(imagem_virtual ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
 
-add_executable(acc_obj_node src/acc_obj.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
-target_compile_options(acc_obj_node PRIVATE ${OpenMP_FLAGS})
-add_dependencies(acc_obj_node ${catkin_EXPORTED_TARGETS})
-target_link_libraries(acc_obj_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})
+#add_executable(acc_obj_node src/acc_obj.cpp ../libraries/src/registerobjectoptm.cpp ../libraries/src/processcloud.cpp)
+#target_compile_options(acc_obj_node PRIVATE ${OpenMP_FLAGS})
+#add_dependencies(acc_obj_node ${catkin_EXPORTED_TARGETS})
+#target_link_libraries(acc_obj_node ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})

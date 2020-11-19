@@ -116,14 +116,10 @@ int main(int argc, char **argv)
   ///
   ROS_INFO("Fechando com ICP ...");
   ros::Time tempo = ros::Time::now();
-  Matrix4f Tfinal = sfm.icp(4.0, 100);
+  Matrix4f Tfinal = sfm.icp(8.0, 200);
   ROS_INFO("Somando spaces ...");
   sfm.somar_spaces(0.10, 40);
   ROS_WARN("Tempo para o ICP e soma das nuvens: %.2f segundos.", (ros::Time::now() - tempo).toSec());
-
-  loadPLYFile<PointTN>(pasta_src+"acumulada.ply", *cloud_src);
-  transformPointCloud<PointTN>(*cloud_src, *cloud_src, Tfinal);
-  savePLYFileBinary<PointTN>(pasta_src+"sefuder.ply", *cloud_src);
 
   /// Escrever arquivo com a transformada final
   ///

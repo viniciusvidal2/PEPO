@@ -150,7 +150,7 @@ void SFM::surf_matches_matrix_encontrar_melhor(){
           // Filtrar keypoints repetidos
           this->filtrar_matches_keypoints_repetidos( kpts_tgt[i], kpts_src[j], good_matches);
           // Filtrar por matches que nao sejam muito horizontais
-          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(25));
+          this->filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(50));
 
           // Anota quantas venceram nessa combinacao
           matches_count(i, j)        = good_matches.size();
@@ -274,16 +274,12 @@ void SFM::obter_transformacao_final_sfm(){
     cout << "\nAplicando transformacao final ..." << endl;
   // Calcular rotacao relativa entre o frame src e tgt, src -> tgt
   // Conta necessaria: 2_R^1 = inv(in_R^2)*in_R^1
-//  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
+  R_src_tgt = rots_src[im_src_indice]*rots_tgt[im_tgt_indice].inverse();
 
-//  // Transformacao final (so rotacao)
-//  Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
+  // Transformacao final (so rotacao)
+  Tsvd.block<3,3>(0, 0) = Rrel * R_src_tgt;
   // Transformacao final (em translacao)
   this->estimar_escala_translacao();
-//  Tsvd.block<3,1>(0, 3) = trel;
-
-  // Transformar a nuvem source com a transformacao estimada
-//  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd);
 
   if(debug){
     // Salvar ambas as nuvens na pasta source pra comparar
@@ -396,7 +392,7 @@ void SFM::estimar_escala_translacao(){
 
   for(auto p:corresp_3d_src){
     PointT pp;
-    p = Tsvd.block<3,3>(0, 0)*p + trel;
+//    p = Tsvd.block<3,3>(0, 0)*p + trel;
     pp.x = p(0); pp.y = p(1); pp.z = p(2);
     pp.g = 255; pp.r = 0; pp.b = 255;
     teste->push_back(pp);
@@ -404,28 +400,34 @@ void SFM::estimar_escala_translacao(){
   savePLYFileBinary(pasta_src+"kpts_src.ply", *teste);
   teste->clear();
 
-  // A partir das correspondencias, pega por ransac a transformacao 3D de uma vez
-  pcl::Correspondences corresp;
-  for(size_t i=0; i<corresp_tgt->size(); i++){
-    pcl::Correspondence corr;
-    corr.index_query = i;
-    corr.index_match = i;
-    corresp.push_back(corr);
+  Tsvd.block<3,1>(0, 3) = trel;
+
+  if(corresp_tgt->size() > 6){
+
+    // A partir das correspondencias, pega por ransac a transformacao 3D de uma vez
+    pcl::Correspondences corresp;
+    for(size_t i=0; i<corresp_tgt->size(); i++){
+      pcl::Correspondence corr;
+      corr.index_query = i;
+      corr.index_match = i;
+      corresp.push_back(corr);
+    }
+
+    /// RANSAC BASED Correspondence Rejection
+    pcl::CorrespondencesConstPtr correspond = boost::make_shared< pcl::Correspondences >(corresp);
+
+    pcl::Correspondences corr;
+    pcl::registration::CorrespondenceRejectorSampleConsensus< PointT > Ransac_based_Rejection;
+    Ransac_based_Rejection.setInputSource(corresp_src);
+    Ransac_based_Rejection.setInputTarget(corresp_tgt);
+    double sac_threshold = 0.5;// default PCL value..can be changed and may slightly affect the number of correspondences
+    Ransac_based_Rejection.setInlierThreshold(sac_threshold);
+    Ransac_based_Rejection.setInputCorrespondences(correspond);
+    Ransac_based_Rejection.getCorrespondences(corr);
+
+    Tsvd = Ransac_based_Rejection.getBestTransformation();
+
   }
-
-  /// RANSAC BASED Correspondence Rejection
-  pcl::CorrespondencesConstPtr correspond = boost::make_shared< pcl::Correspondences >(corresp);
-
-  pcl::Correspondences corr;
-  pcl::registration::CorrespondenceRejectorSampleConsensus< PointT > Ransac_based_Rejection;
-  Ransac_based_Rejection.setInputSource(corresp_src);
-  Ransac_based_Rejection.setInputTarget(corresp_tgt);
-  double sac_threshold = 0.5;// default PCL value..can be changed and may slightly affect the number of correspondences
-  Ransac_based_Rejection.setInlierThreshold(sac_threshold);
-  Ransac_based_Rejection.setInputCorrespondences(correspond);
-  Ransac_based_Rejection.getCorrespondences(corr);
-
-  Tsvd = Ransac_based_Rejection.getBestTransformation();
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////
 void SFM::filtrar_matches_keypoints_repetidos(vector<KeyPoint> kt, vector<KeyPoint> ks, vector<DMatch> &m){
@@ -558,8 +560,8 @@ Matrix4f SFM::icp(float vs, int its){
   // Reduzindo ainda mais as nuvens pra nao dar trabalho assim ao icp
   PointCloud<PointXYZRGBA>::Ptr tgttemp(new PointCloud<PointXYZRGBA>);
   PointCloud<PointXYZRGBA>::Ptr srctemp(new PointCloud<PointXYZRGBA>);
-  copyPointCloud(*cloud_tgt, *tgttemp);
-  copyPointCloud(*cloud_src, *srctemp);
+  copyPointCloud(*ctgt, *tgttemp);
+  copyPointCloud(*csrc, *srctemp);
   if(vs > 0){
     VoxelGrid<PointXYZRGBA> voxel;
     voxel.setLeafSize(vs, vs, vs);
@@ -586,9 +588,9 @@ Matrix4f SFM::icp(float vs, int its){
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-6);
+//  icp.setTransformationEpsilon(1*1e-6);
   icp.setEuclideanFitnessEpsilon(1*1e-6);
-  icp.setMaxCorrespondenceDistance(0.15);
+  icp.setMaxCorrespondenceDistance(0.5);
   // Alinhando
   PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());
@@ -607,13 +609,76 @@ Matrix4f SFM::icp(float vs, int its){
 
   Tfinal = Ticp*Tsvd;
 
+  return Tfinal;
+}
+/////////////////////////////////////////////////////////////////////////////////////////////////
+Matrix4f SFM::icpnl(float vs, int its){
+  // Atribuindo FOV para as nuvens de acordo com a orientacao (usando fov da camera ~80 graus)
+  PointCloud<PointTN>::Ptr csrc (new PointCloud<PointTN>);
+  PointCloud<PointTN>::Ptr ctgt (new PointCloud<PointTN>);
+  if(debug)
+    cout << "\nTirando FOV ..." << endl;
+  float thresh = 50.0/2.0;
+  float d;
+  for(size_t i=0; i<cloud_tgt->size(); i++){
+    Vector3f p{(*cloud_tgt)[i].x, (*cloud_tgt)[i].y, (*cloud_tgt)[i].z};
+    p = rots_tgt[im_tgt_indice]*p;
+    d = p.norm();
+    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
+      ctgt->push_back((*cloud_tgt)[i]);
+  }
+  for(size_t i=0; i<cloud_src->size(); i++){
+    Vector3f p{(*cloud_src)[i].x, (*cloud_src)[i].y, (*cloud_src)[i].z};
+    p = rots_src[im_src_indice]*p;
+    d = p.norm();
+    if(abs(acos( p(2)/d )) < DEG2RAD(thresh) && p(2) > 0)
+      csrc->push_back((*cloud_src)[i]);
+  }
+  transformPointCloudWithNormals(*csrc, *csrc, Tsvd);
+  transformPointCloudWithNormals(*cloud_src, *cloud_src, Tsvd);
 
+  Ticp = Matrix4f::Identity();
+  vs = vs/100.0;
+  if(debug)
+    cout << "\nPerformando ICP ..." << endl;
+//  if(vs > 0){
+//    VoxelGrid<PointTN> voxel;
+//    voxel.setLeafSize(vs, vs, vs);
+//    voxel.setInputCloud(ctgt);
+//    voxel.filter(*ctgt);
+//    voxel.setInputCloud(csrc);
+//    voxel.filter(*csrc);
+//  }
+  savePLYFileBinary<PointTN>(pasta_src+"src_antes_icp.ply", *csrc);
 
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Ticp.inverse());
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tsvd.inverse());
-  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Tfinal);
+  // Criando o otimizador de ICP
+  IterativeClosestPointNonLinear<PointTN, PointTN> icp;
+//  IterativeClosestPoint<PointTN, PointTN> icp;
+//  icp.setUseReciprocalCorrespondences(true);
+  icp.setInputTarget(csrc);
+  icp.setInputSource(ctgt);
+  //    icp.setRANSACIterations(30);
+  icp.setMaximumIterations(its); // Chute inicial bom 10-100
+//  icp.setTransformationEpsilon(1*1e-6);
+  icp.setEuclideanFitnessEpsilon(1*1e-6);
+  icp.setMaxCorrespondenceDistance(0.2);
+  // Alinhando
+  PointCloud<PointTN> dummy;
+  icp.align(dummy, Matrix4f::Identity());
+  // Obtendo a transformacao otimizada e aplicando
+  if(icp.hasConverged()){
+    Ticp = icp.getFinalTransformation();
+    cout << "\nICP convergiu !!!" << endl;
+  }
 
+  // Trazer nuvem source finalmente para a posicao
+  transformPointCloudWithNormals<PointTN>(*cloud_src, *cloud_src, Ticp);
+  transformPointCloudWithNormals<PointTN>(*csrc, *csrc, Ticp);
 
+  savePLYFileBinary<PointTN>(pasta_src+"src_final.ply", *csrc);
+  savePLYFileBinary<PointTN>(pasta_src+"tgt_final.ply", *ctgt);
+
+  Tfinal = Ticp*Tsvd;
 
   return Tfinal;
 }
@@ -644,7 +709,6 @@ void SFM::somar_spaces(float radius, int rate){
 
   // Somar as duas nuvens e salvar resultado
   result = *cloud_tgt + *cloud_src;
-//  *cloud_tgt += *cloud_src;
   savePLYFileBinary<PointTN>(pasta_src+"registro_final.ply", result);
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

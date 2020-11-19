@@ -57,11 +57,16 @@ Matrix4f RegisterObjectOptm::icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<Point
   PointCloud<PointTN>::Ptr tgttemp(new PointCloud<PointTN>);
   PointCloud<PointTN>::Ptr srctemp(new PointCloud<PointTN>);
   VoxelGrid<PointTN> voxel;
-  voxel.setLeafSize(vs, vs, vs);
-  voxel.setInputCloud(ctgt);
-  voxel.filter(*tgttemp);
-  voxel.setInputCloud(csrc);
-  voxel.filter(*srctemp);
+  if(vs > 0){
+    voxel.setLeafSize(vs, vs, vs);
+    voxel.setInputCloud(ctgt);
+    voxel.filter(*tgttemp);
+    voxel.setInputCloud(csrc);
+    voxel.filter(*srctemp);
+  } else {
+    *srctemp = *csrc;
+    *tgttemp = *ctgt;
+  }
   StatisticalOutlierRemoval<PointTN> sor;
   sor.setMeanK(30);
   sor.setStddevMulThresh(2);
@@ -135,9 +140,9 @@ Matrix4f RegisterObjectOptm::gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<Po
   icp.setInputSource(srctemp);
   //    icp.setRANSACIterations(30);
   icp.setMaximumIterations(its); // Chute inicial bom 10-100
-  icp.setTransformationEpsilon(1*1e-6);
-  icp.setEuclideanFitnessEpsilon(1*1e-6);
-  icp.setMaxCorrespondenceDistance(vs*3);
+  icp.setTransformationEpsilon(1*1e-8);
+  icp.setEuclideanFitnessEpsilon(1*1e-11);
+  icp.setMaxCorrespondenceDistance(vs*2);
   // Alinhando
   PointCloud<PointXYZRGBA> dummy;
   icp.align(dummy, Matrix4f::Identity());
@@ -216,17 +221,17 @@ void RegisterObjectOptm::matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, Poin
   ppnow = temps; ppref = tempt;
   /////////////////////////////////////////////////
 
-//  Mat imnow2, imref2;
-//  imnow.copyTo(imnow2);
-//  imref.copyTo(imref2);
-//  for(int i=0; i<ppref.size(); i++){
-//    int r = rand()%255, b = rand()%255, g = rand()%255;
-//    circle(imref2, Point(ppref[i].x, ppref[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
-//    circle(imnow2, Point(ppnow[i].x, ppnow[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
-//  }
-//  imshow("targetc", imref2);
-//  imshow("sourcec", imnow2);
-//  waitKey(0);
+  Mat imnow2, imref2;
+  imnow.copyTo(imnow2);
+  imref.copyTo(imref2);
+  for(int i=0; i<ppref.size(); i++){
+    int r = rand()%255, b = rand()%255, g = rand()%255;
+    circle(imref2, Point(ppref[i].x, ppref[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
+    circle(imnow2, Point(ppnow[i].x, ppnow[i].y), 8, Scalar(r, g, b), FILLED, LINE_8);
+  }
+  imshow("targetc", imref2);
+  imshow("sourcec", imnow2);
+  waitKey(0);
 
   // Dados intrinsecos da camera
   float fx = 1427.1, fy = 1449.4, cx = 987.9, cy = 579.4;
@@ -342,8 +347,6 @@ void RegisterObjectOptm::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, Po
     // Iniciar kdtree de busca
     KdTreeFLANN<PointTN> kdtree;
     kdtree.setInputCloud(cobj);
-    vector<int> pointIdxRadiusSearch;
-    vector<float> pointRadiusSquaredDistance;
     // Nuvem de pontos de indices bons
     PointIndices::Ptr indices (new PointIndices);
     // Retirando indices NaN se existirem
@@ -351,16 +354,29 @@ void RegisterObjectOptm::searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, Po
     removeNaNFromPointCloud(*cnow, *cnow, indicesNaN);
     removeNaNFromPointCloud(*cobj, *cobj, indicesNaN);
     // Para cada ponto, se ja houver vizinhos, nao seguir
+    PointCloud<PointTN>::Ptr temp (new PointCloud<PointTN>);
+    temp->resize(cnow->size());
+#pragma omp parallel for
     for(size_t i=0; i<cnow->size(); i++){
-      if(kdtree.radiusSearch(cnow->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate)
+      vector<int> pointIdxRadiusSearch;
+      vector<float> pointRadiusSquaredDistance;
+      if(kdtree.radiusSearch(cnow->points[i], radius, pointIdxRadiusSearch, pointRadiusSquaredDistance) <= rate){
+        (*temp)[i] = (*cnow)[i];
+      } else {
+        (*temp)[i].x = 0; (*temp)[i].y = 0; (*temp)[i].z = 0;
+      }
+    }
+    for(size_t i=0; i<temp->size(); i++){
+      if((*temp)[i].x == 0 && (*temp)[i].y == 0 && (*temp)[i].z == 0)
         indices->indices.emplace_back(i);
     }
     // Filtrar na nuvem now so os indices que estao sem vizinhos na obj
     ExtractIndices<PointTN> extract;
-    extract.setInputCloud(cnow);
+    extract.setInputCloud(temp);
     extract.setIndices(indices);
-    extract.setNegative(false);
+    extract.setNegative(true);
     extract.filter(*cnow);
+    cout << "Retiraram " << indices->indices.size() << " de " << temp->size() << endl;
   }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////

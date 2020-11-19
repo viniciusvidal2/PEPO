@@ -45,6 +45,7 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/gicp.h>
 #include <pcl/registration/gicp6d.h>
+#include <pcl/registration/icp_nl.h>
 #include <pcl/registration/transformation_estimation_svd.h>
 #include <pcl/registration/transformation_estimation_point_to_plane_lls.h>
 #include <pcl/keypoints/harris_3d.h>
@@ -101,6 +102,7 @@ public:
   void set_debug(bool b);
   void obter_transformacao_final_sfm();
   Matrix4f icp(float vs, int its);
+  Matrix4f icpnl(float vs, int its);
   void somar_spaces(float radius, int rate);
 
   void set_clouds(PointCloud<PointTN>::Ptr ct, PointCloud<PointTN>::Ptr cs);
