@@ -59,7 +59,7 @@ int ntilts = 4, contador_nuvens = 0;
 float voxel_size, depth;
 int filter_poli;
 // Braco do centro ao laser
-Vector3f off_laser{0, 0, 0.04};
+Vector3f off_laser{0, 0, 0.056};
 
 // Vetores para resultados de tempo
 vector<float > tempos_transito_msg, tempos_filtra_cor, tempos_octree, tempos_demaisfiltros, tempos_normais, tempos_vizinhos_lastview, tempos_rcast;
@@ -359,10 +359,10 @@ void cloudCallback(const sensor_msgs::PointCloud2ConstPtr &msg_cloud, const nav_
 
       // Calcula centro da camera
       Vector3f C = Rp*off_laser;
-      C = Rcam.transpose()*pc->gettCam() + C;
+      C = -Rcam.transpose()*pc->gettCam() + C;
 
       // Calcula vetor de translacao da camera por t = -R'*C
-      Vector3f tcam = -Rcam*C;
+      Vector3f tcam = C;
 
       ///// ADICIONANDO CENTRO DA CAMERA NA NUVEM PARA TESTE
       //            PointTN pteste;

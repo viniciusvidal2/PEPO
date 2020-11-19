@@ -317,7 +317,7 @@ int main(int argc, char **argv)
     Tcam.block<3,1>(0, 3) = -pc.gettCam(); // Aqui e negativo! conferido no mart
     Tcam = Tobj*Tcam;
     Rcam = Tcam.block<3,3>(0, 0).inverse();
-    tcam = -Tcam.block<3,1>(0, 3);
+    tcam = Tcam.block<3,1>(0, 3);
     linhas_sfm.push_back(pc.escreve_linha_sfm(nomes_imagens[i], Rcam, tcam));
     pc.compileFinalSFM(linhas_sfm);
 
