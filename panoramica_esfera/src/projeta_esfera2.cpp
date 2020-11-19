@@ -500,10 +500,10 @@ Matrix4f calculateCameraPose(Quaternion<float> q, Vector3f &C, int i) {
 	return T;
 }
 Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &t) {
-  Vector3f C = -rot.transpose()*t;
+  Vector3f C = -rot*t;
 
 	Matrix4f T = Matrix4f::Identity();
-  T.block<3, 3>(0, 0) = rot.transpose(); T.block<3, 1>(0, 3) = C;
+  T.block<3, 3>(0, 0) = rot.transpose(); //T.block<3, 1>(0, 3) = C;
 
 
 	return T;
@@ -586,8 +586,8 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-  std::string pasta = string(home) + "/Desktop/SANTOS_DUMONT_2/galpao/scan3/";
-  std::string arquivo_nvm = pasta + "cameras2.sfm";
+  std::string pasta = string(home) + "/Desktop/SANTOS_DUMONT_2/sala/scan2/";
+  std::string arquivo_nvm = pasta + "cameras.sfm";
 
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -744,9 +744,9 @@ int main(int argc, char **argv)
 	struct stat buffer;
 
 	// Supoe a esfera com resolucao em graus de tal forma - resolucao da imagem final
-  float R = 1; // Raio da esfera [m]
+  float R = 5; // Raio da esfera [m]
 	// Angulos para lat e lon, 360 de range para cada, resolucao a definir no step_deg
-  float step_deg = 0.3; // [DEGREES]
+  float step_deg = 0.1; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
 	/// Para cada imagem
@@ -790,12 +790,12 @@ int main(int argc, char **argv)
 		// Definir o foco em dimensoes fisicas do frustrum
     float F = R;
 		double minX, minY, maxX, maxY;
-    double dx = center[0] - double(image.cols)/2, dy = center[1] - double(image.rows)/2;
-//    double dx = 0, dy = 0;
-    maxX =  F * (float(image.cols) - 2*dx) / (2.0*foco[0]);
-    minX = -F * (float(image.cols) + 2*dx) / (2.0*foco[0]);
-    maxY =  F * (float(image.rows) - 2*dy) / (2.0*foco[1]);
-    minY = -F * (float(image.rows) + 2*dy) / (2.0*foco[1]);
+//    double dx = center[0] - double(image.cols)/2, dy = center[1] - double(image.rows)/2;
+    double dx = 0, dy = 0;
+    maxX =  F * (float(image.cols) - dx) / (2.0*foco[0]);
+    minX = -F * (float(image.cols) + dx) / (2.0*foco[0]);
+    maxY =  F * (float(image.rows) - dy) / (2.0*foco[1]);
+    minY = -F * (float(image.rows) + dy) / (2.0*foco[1]);
 		//		// Calcular os 4 pontos do frustrum
 		//		/*
 		//								origin of the camera = p1
