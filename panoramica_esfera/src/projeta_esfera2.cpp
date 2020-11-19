@@ -509,7 +509,38 @@ Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &t) {
 	return T;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &img, Mat im360) {
+void dotsFilter(Mat &in){
+  // Imagem temporaria para servir de fonte, enquanto altera a imagem passada por ponteiro
+  Mat temp;
+  in.copyTo(temp);
+  // Varrer imagem de forma paralela, se achar ponto preto, tirar a media da vizinhanca nxn predefinida e trocar a cor do pixel
+  const int n=5;
+#pragma omp parallel for
+  for(int u=n+1; u<temp.cols-n-1; u++){
+    for(int v=n+1; v<temp.rows-n-1; v++){
+      Vec3b cor_atual = temp.at<Vec3b>(Point(u, v));
+      // Se preto, alterar com vizinhos
+//      if(cor_atual[0] == 0 && cor_atual[1] == 0 && cor_atual[2] == 0){
+//        // Media dos vizinhos
+//        int r = 0, g = 0, b = 0;
+//        for(int i=u-n; i<u+n; i++){
+//          for(int j=v-n; j<v+n; j++){
+//            Vec3b c = temp.at<Vec3b>(i, j);
+//            r += c[0]; g += c[1]; b += c[2];
+//          }
+//        }
+//        cor_atual[0] = r/pow(n+1, 2); cor_atual[1] = g/pow(n+1, 2); cor_atual[2] = b/pow(n+1, 2);
+//        // Altera somente na imagem de saida
+//        in.at<Vec3b>(Point(u, v)) = cor_atual;
+//      }
+    }
+  }
+  // Limpa imagem temp
+  temp.release();
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Vector3f pc, Mat im, Mat &img, Mat im360) {
 	// A partir de frustrum, calcular a posicao de cada pixel da imagem fonte em XYZ, assim como quando criavamos o plano do frustrum
 	Vector3f hor_step, ver_step; // Steps pra se andar de acordo com a resolucao da imagem
 	hor_step = (p4 - p5) / float(im.cols);
@@ -519,6 +550,8 @@ void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &im
 		for (int j = 0; j < im.cols; j++) {
 			Vector3f ponto;
 			ponto = p5 + hor_step * j + ver_step * i;
+
+      if((pc - ponto).norm() < (p4 - p5).norm()/2){
 
 			// Calcular latitude e longitude da esfera de volta a partir de XYZ
 			float lat = RAD2DEG(acos(ponto[1] / ponto.norm()));
@@ -535,6 +568,9 @@ void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &im
 			// Pintar a imagem final com as cores encontradas
 			im360.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
 			img.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
+
+      }
+
 		}
 	}
 }
@@ -550,8 +586,8 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-  std::string pasta = string(home) + "/Desktop/SANTOS_DUMONT_2/patio/scan6/";
-  std::string arquivo_nvm = pasta + "cameras_ok.sfm";
+  std::string pasta = string(home) + "/Desktop/SANTOS_DUMONT_2/galpao/scan3/";
+  std::string arquivo_nvm = pasta + "cameras2.sfm";
 
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -593,65 +629,65 @@ int main(int argc, char **argv)
 			return 0;
 		}
 	}
-	// Reorganizando nvm para facilitar para mim o blending -  Colocando em linhas
-	int i = 0;
-	int cont = 0;
+//	// Reorganizando nvm para facilitar para mim o blending -  Colocando em linhas
+//	int i = 0;
+//	int cont = 0;
 
-	while (cont < 6) {
+//	while (cont < 6) {
 
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 7;
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 7;
 
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 1;
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 1;
 
-		cont++;
-	}
+//		cont++;
+//	}
 
 
-	i = 1;
-	cont = 0;
+//	i = 1;
+//	cont = 0;
 
-	while (cont < 6)
-	{
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 5;
+//	while (cont < 6)
+//	{
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 5;
 
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 3;
-		cont++;
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 3;
+//		cont++;
 
-	}
+//	}
 
-	i = 2;
-	cont = 0;
+//	i = 2;
+//	cont = 0;
 
-	while (cont < 6)
-	{
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 3;
+//	while (cont < 6)
+//	{
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 3;
 
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 5;
-		cont++;
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 5;
+//		cont++;
 
-	}
+//	}
 
-	i = 3;
-	cont = 0;
+//	i = 3;
+//	cont = 0;
 
-	while (cont < 6)
-	{
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 1;
+//	while (cont < 6)
+//	{
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 1;
 
-		linhas_organizadas.push_back(linhas[i]);
-		i = i + 7;
-		cont++;
+//		linhas_organizadas.push_back(linhas[i]);
+//		i = i + 7;
+//		cont++;
 
-	}
+//	}
 
-	linhas = linhas_organizadas;
+//	linhas = linhas_organizadas;
 	int index = 0;
 	// Alocar nos respectivos vetores
 	Vector2f	center;
@@ -708,9 +744,9 @@ int main(int argc, char **argv)
 	struct stat buffer;
 
 	// Supoe a esfera com resolucao em graus de tal forma - resolucao da imagem final
-	float R = 5; // Raio da esfera [m]
+  float R = 1; // Raio da esfera [m]
 	// Angulos para lat e lon, 360 de range para cada, resolucao a definir no step_deg
-  float step_deg = 0.1; // [DEGREES]
+  float step_deg = 0.3; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
 	/// Para cada imagem
@@ -732,7 +768,7 @@ int main(int argc, char **argv)
 	//ros::Time tempo = ros::Time::now();
 	auto start = chrono::steady_clock::now();
 	printf("Processando cada foto, sem print nenhum pra ir mais rapido ...\n");
-//#pragma omp parallel for
+#pragma omp parallel for
 	for (int i = 0; i < nomes_imagens.size(); i++)
 	{
 //		printf("Processando foto %d...\n", i + 1);
@@ -755,6 +791,7 @@ int main(int argc, char **argv)
     float F = R;
 		double minX, minY, maxX, maxY;
     double dx = center[0] - double(image.cols)/2, dy = center[1] - double(image.rows)/2;
+//    double dx = 0, dy = 0;
     maxX =  F * (float(image.cols) - 2*dx) / (2.0*foco[0]);
     minX = -F * (float(image.cols) + 2*dx) / (2.0*foco[0]);
     maxY =  F * (float(image.rows) - 2*dy) / (2.0*foco[1]);
@@ -772,20 +809,20 @@ int main(int argc, char **argv)
 		p << 0, 0, 0, 1;
     p1 = T * p;
 		p << minX, minY, F, 1;
-    p2 = p1 + T * p;
+    p2 = T * p;
 		p << maxX, minY, F, 1;
-    p3 = p1 + T * p;
+    p3 = T * p;
 		p << maxX, maxY, F, 1;
-    p4 = p1 + T * p;
+    p4 = T * p;
 		p << minX, maxY, F, 1;
-    p5 = p1 + T * p;
+    p5 = T * p;
 		p << 0, 0, F, 1;
 		pCenter = T * p;
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
 		//imagem_esferica[i] = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
 		//imagem_esferica.convertTo(imagem_esferica, CV_8UC3, 255.0);
 		Mat imagem_esferica = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), image, im360, imagem_esferica);		//imagem_esferica[i] = im360;
+    doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), pCenter.block<3, 1>(0, 0), image, im360, imagem_esferica);		//imagem_esferica[i] = im360;
 		//imwrite("C:/dataset3/im360.png", im360 );
 //		if (i == 0) {
 //			anterior.release();
@@ -873,6 +910,7 @@ int main(int argc, char **argv)
 	cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
 	//ROS_WARN("Tempo para processar: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 	// Salvando imagem esferica final
+  dotsFilter(im360);
 	imwrite(pasta + "imagem_esferica_result_Homografia.png", im360);
 	printf("Processo finalizado.");
 
