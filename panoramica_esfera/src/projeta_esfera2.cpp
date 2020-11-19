@@ -499,12 +499,11 @@ Matrix4f calculateCameraPose(Quaternion<float> q, Vector3f &C, int i) {
 
 	return T;
 }
-Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &C, int i) {
-	Matrix3f r = rot;
-	Vector3f t = C;
+Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &t) {
+  Vector3f C = -rot.transpose()*t;
 
 	Matrix4f T = Matrix4f::Identity();
-	T.block<3, 3>(0, 0) = r.transpose(); T.block<3, 1>(0, 3) = t;
+  T.block<3, 3>(0, 0) = rot.transpose(); T.block<3, 1>(0, 3) = C;
 
 
 	return T;
@@ -551,8 +550,8 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada2/";
-	std::string arquivo_nvm = pasta + "cameras.sfm";
+  std::string pasta = string(home) + "/Desktop/SANTOS_DUMONT_2/patio/scan6/";
+  std::string arquivo_nvm = pasta + "cameras_ok.sfm";
 
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -711,7 +710,7 @@ int main(int argc, char **argv)
 	// Supoe a esfera com resolucao em graus de tal forma - resolucao da imagem final
 	float R = 5; // Raio da esfera [m]
 	// Angulos para lat e lon, 360 de range para cada, resolucao a definir no step_deg
-	float step_deg = 0.05; // [DEGREES]
+  float step_deg = 0.1; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
 	/// Para cada imagem
@@ -733,9 +732,10 @@ int main(int argc, char **argv)
 	//ros::Time tempo = ros::Time::now();
 	auto start = chrono::steady_clock::now();
 	printf("Processando cada foto, sem print nenhum pra ir mais rapido ...\n");
+//#pragma omp parallel for
 	for (int i = 0; i < nomes_imagens.size(); i++)
 	{
-		printf("Processando foto %d...\n", i + 1);
+//		printf("Processando foto %d...\n", i + 1);
 		// Ler a imagem a ser usada
 		Mat image = imread(nomes_imagens[i]);
 		if (image.cols < 3)
@@ -744,7 +744,7 @@ int main(int argc, char **argv)
 		// Calcular a vista da camera pelo Rt inverso - rotacionar para o nosso mundo, com Z para cima
 		Matrix4f T;
 		if (flag == 1) {
-			T = calculateCameraPoseSFM(rot[i], Cs[i], i);
+      T = calculateCameraPoseSFM(rot[i], Cs[i]);
 		}
 		else {
 
@@ -752,13 +752,13 @@ int main(int argc, char **argv)
 		}
 
 		// Definir o foco em dimensoes fisicas do frustrum
-		float F = R;
-		Vector3f C = Cs[i];
+    float F = R;
 		double minX, minY, maxX, maxY;
-		maxX = F * (float(image.cols) / (2.0*foco[0]));
-		minX = -maxX;
-		maxY = F * (float(image.rows) / (2.0*foco[1]));
-		minY = -maxY;
+    double dx = center[0] - double(image.cols)/2, dy = center[1] - double(image.rows)/2;
+    maxX =  F * (float(image.cols) - 2*dx) / (2.0*foco[0]);
+    minX = -F * (float(image.cols) + 2*dx) / (2.0*foco[0]);
+    maxY =  F * (float(image.rows) - 2*dy) / (2.0*foco[1]);
+    minY = -F * (float(image.rows) + 2*dy) / (2.0*foco[1]);
 		//		// Calcular os 4 pontos do frustrum
 		//		/*
 		//								origin of the camera = p1
@@ -770,15 +770,15 @@ int main(int argc, char **argv)
 		//		*/
 		Vector4f p, p1, p2, p3, p4, p5, pCenter;
 		p << 0, 0, 0, 1;
-		p1 = T * p;
+    p1 = T * p;
 		p << minX, minY, F, 1;
-		p2 = T * p;
+    p2 = p1 + T * p;
 		p << maxX, minY, F, 1;
-		p3 = T * p;
+    p3 = p1 + T * p;
 		p << maxX, maxY, F, 1;
-		p4 = T * p;
+    p4 = p1 + T * p;
 		p << minX, maxY, F, 1;
-		p5 = T * p;
+    p5 = p1 + T * p;
 		p << 0, 0, F, 1;
 		pCenter = T * p;
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
@@ -787,85 +787,85 @@ int main(int argc, char **argv)
 		Mat imagem_esferica = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), image, im360, imagem_esferica);		//imagem_esferica[i] = im360;
 		//imwrite("C:/dataset3/im360.png", im360 );
-		if (i == 0) {
-			anterior.release();
-			index = 0;
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-			//imwrite("C:/dataset3/anterior.png", anterior * 255);
-		}
-		if (i > 0 && i < 12)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result1 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result1;
-			imagem_esferica.release();
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result1 * 255);
-		}
-		if (i == 12) {
-			anterior.release();
-			index = 0;
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-		}
+//		if (i == 0) {
+//			anterior.release();
+//			index = 0;
+//			anterior = imagem_esferica;
+//			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+//			//imwrite("C:/dataset3/anterior.png", anterior * 255);
+//		}
+//		if (i > 0 && i < 12)
+//		{
+//			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
+//			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+//			result1 = multiband_blending(anterior, imagem_esferica, index);
+//			anterior = result1;
+//			imagem_esferica.release();
+//			//imwrite("C:/dataset3/imagem_esferica_result.png", result1 * 255);
+//		}
+//		if (i == 12) {
+//			anterior.release();
+//			index = 0;
+//			anterior = imagem_esferica;
+//			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+//		}
 
-		if (i > 12 && i < 24)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result2 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result2;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result2 * 255);
-			imagem_esferica.release();
-		}
-		if (i == 24)
-		{
-			anterior.release();
-			index = 0;
+//		if (i > 12 && i < 24)
+//		{
+//			//imwrite("C:/dataset3/atual.png", imagem_esferica);
+//			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+//			result2 = multiband_blending(anterior, imagem_esferica, index);
+//			anterior = result2;
+//			//imwrite("C:/dataset3/imagem_esferica_result.png", result2 * 255);
+//			imagem_esferica.release();
+//		}
+//		if (i == 24)
+//		{
+//			anterior.release();
+//			index = 0;
 
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-		}
+//			anterior = imagem_esferica;
+//			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+//		}
 
-		if (i > 24 && i < 36)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result3 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result3;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result3 * 255);
-			imagem_esferica.release();
+//		if (i > 24 && i < 36)
+//		{
+//			//imwrite("C:/dataset3/atual.png", imagem_esferica);
+//			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+//			result3 = multiband_blending(anterior, imagem_esferica, index);
+//			anterior = result3;
+//			//imwrite("C:/dataset3/imagem_esferica_result.png", result3 * 255);
+//			imagem_esferica.release();
 
-		}
-		if (i == 36) {
-			anterior.release();
-			index = 0;
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-		}
+//		}
+//		if (i == 36) {
+//			anterior.release();
+//			index = 0;
+//			anterior = imagem_esferica;
+//			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+//		}
 
-		if (i > 36 && i < 48)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result4 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result4;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result4 * 255);
-			imagem_esferica.release();
-			//	//result4.convertTo(result4, CV_8UC3, 255);
-		}
-		index++;
+//		if (i > 36 && i < 48)
+//		{
+//			//imwrite("C:/dataset3/atual.png", imagem_esferica);
+//			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+//			result4 = multiband_blending(anterior, imagem_esferica, index);
+//			anterior = result4;
+//			//imwrite("C:/dataset3/imagem_esferica_result.png", result4 * 255);
+//			imagem_esferica.release();
+//			//	//result4.convertTo(result4, CV_8UC3, 255);
+//		}
+//		index++;
 	} // Fim do for imagens;
 
 		 //Resultado Final - Juntando os blendings horizontais
-	Mat result;
-	index = 73;
-	result = multiband_blending(result4, result3, index);
-	result = multiband_blending(result, result2, index);
-	result = multiband_blending(result, result1, index);
-	result.convertTo(result, CV_8UC3, 255);
-	imwrite(pasta + "imagem_esferica_Blending_Res005.png", result);
+//	Mat result;
+//	index = 73;
+//	result = multiband_blending(result4, result3, index);
+//	result = multiband_blending(result, result2, index);
+//	result = multiband_blending(result, result1, index);
+//	result.convertTo(result, CV_8UC3, 255);
+//	imwrite(pasta + "imagem_esferica_Blending_Res005.png", result);
 
 	auto end = chrono::steady_clock::now();
 	//// Store the time difference between start and end
