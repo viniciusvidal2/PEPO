@@ -1,4 +1,4 @@
-//#include <ros/ros.h>
+////#include <ros/ros.h>
 #include <iostream>
 #include <string>
 #include <math.h>
@@ -30,8 +30,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 
-///Definicoes e namespaces
-///
+//Definicoes e namespaces
+
 using namespace pcl;
 using namespace pcl::io;
 using namespace cv;
@@ -51,7 +51,7 @@ bool findMinMaxcols(Point const& a, Point const& b)
 {
 	return a.x < b.x;
 }
-Mat createMask(Mat img, vector<vector<Point>> contours, int k)
+Mat createMask(Mat img, vector<vector<Point>> contours, int k, int qnt_images_linha)
 {
 	//verificando os pontos pertencentes ao contorno
 	vector<Point> pts;
@@ -75,7 +75,7 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 #pragma omp parallel for
 		for (int i = 0; i < img.cols; i++)
 		{
-			for (int j = valV.first->y; j < valV.first->y + sizeV / 2 - 11; j++)
+			for (int j = valV.first->y; j < valV.first->y + sizeV / 2 - 20; j++)
 			{
 				Vec3b color1(0, 0, 0);
 				img.at< Vec3b>(Point(i, j)) = color1;
@@ -89,7 +89,7 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 
 	//Blending horizontal - Possibilidades :
 	// última Imagem Tem comportamento diferente
-	if (k == 11)
+	if (k == qnt_images_linha - 1 || k == qnt_images_linha - 2)
 	{
 		//Se tiver pedaços de imagem nos 2 extremos da imagem
 		if (val.first->x == 0 && val.second->x == img.cols - 1)
@@ -150,7 +150,7 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 		//Caso contrario tira pedaço dos dois extremos para não aparecer as bordas no blending
 		else {
 #pragma omp parallel for
-			for (int i = val.first->x; i < val.first->x + size / 3; i++)
+			for (int i = val.first->x; i < val.first->x + size / 3 - 5; i++)
 			{
 				for (int j = 0; j < img.rows; j++)
 				{
@@ -160,7 +160,7 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 				}
 			}
 #pragma omp parallel for
-			for (int i = val.second->x - size / 3; i < val.second->x; i++)
+			for (int i = val.second->x - size / 3 - 5; i < val.second->x; i++)
 			{
 				for (int j = 0; j < img.rows; j++)
 				{
@@ -172,10 +172,10 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 		}
 	}
 	// Outras imagens
-	if (k != 11 && k != 73)
+	if (k != qnt_images_linha - 1 && k != 73 && k != qnt_images_linha - 2)
 	{
 
-		if (k == 9)
+		if (k == qnt_images_linha - 4)
 		{
 
 			vector<Point>pts_Teste, points;
@@ -342,14 +342,10 @@ Mat createMask(Mat img, vector<vector<Point>> contours, int k)
 	return img;
 
 }
-Mat multiband_blending(Mat a, const Mat b, int k) {
+Mat multiband_blending(Mat a, const Mat b, int k, int qnt_images_linha) {
 
 	int level_num = 4;//numero de niveis
-	/*int w = a.cols, h = a.rows;*/
-
-	//Mat* a_pyramid = new Mat[level_num];
-	//Mat* b_pyramid = new Mat[level_num];
-	//Mat* mask = new Mat[level_num];
+	
 	std::vector <cv::Mat> a_pyramid;
 	std::vector <cv::Mat> b_pyramid;
 	std::vector <cv::Mat> mask;
@@ -395,7 +391,7 @@ Mat multiband_blending(Mat a, const Mat b, int k) {
 	//Parte comum entre as imagens
 	Mat out(src_gray1.rows, src_gray1.cols, CV_8UC3, Scalar::all(0));
 	bitwise_and(dst1, dst, out);
-	//imwrite("C:/dataset3/areaComum.png", out);
+	
 	/////////////Contorno Parte comum
 	Mat src_gray3;
 	//src_gray3 = out;
@@ -415,10 +411,10 @@ Mat multiband_blending(Mat a, const Mat b, int k) {
 
 	//Encontrando a máscara
 
-	Mat mask_out = createMask(dst3, contours3, k);
+	Mat mask_out = createMask(dst3, contours3, k, qnt_images_linha);
 
 	cv::subtract(dst, mask_out, dst);
-
+	
 	dst.convertTo(dst, CV_32FC3, 1.0 / 255.0);
 	mask[0] = dst;
 
@@ -510,7 +506,44 @@ Matrix4f calculateCameraPoseSFM(Matrix3f rot, Vector3f &C, int i) {
 	return T;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &img, Mat im360) {
+void dotsFilter(Mat &in) {
+	// Imagem temporaria para servir de fonte, enquanto altera a imagem passada por ponteiro
+	Mat temp;
+	in.copyTo(temp);
+	// Varrer imagem de forma paralela, se achar ponto preto, tirar a media da vizinhanca nxn predefinida e trocar a cor do pixel
+	const int n = 3;
+	int cont = 0;
+#pragma omp parallel for
+	for (int u = n + 1; u < temp.cols - n - 1; u++) {
+		for (int v = n + 1; v < temp.rows - n - 1; v++) {
+			Vec3b cor_atual = temp.at<Vec3b>(Point(u, v));
+			// Se preto, alterar com vizinhos
+			if (cor_atual[0] == 0 && cor_atual[1] == 0 && cor_atual[2] == 0) {
+				//Media dos vizinhos
+				int r = 0, g = 0, b = 0;
+				for (int i = u - n; i < u + n; i++) {
+					for (int j = v - n; j < v + n; j++) {
+						Vec3b c = temp.at<Vec3b>(Point(i, j));
+						if (c[0] != 0 && c[1] != 0 && c[2] != 0) {
+							r = c[0]; g = c[1]; b = c[2];
+							//r = 0; g = 255; b = 255;
+							break;
+						}
+					}
+				}
+				//cor_atual[0] = r / pow(n - 1, 2); cor_atual[1] = g / pow(n - 1, 2); cor_atual[2] = b / pow(n - 1, 2);
+				cor_atual[0] = r; cor_atual[1] = g; cor_atual[2] = b;
+
+				//Altera somente na imagem de saida
+				in.at<Vec3b>(Point(u, v)) = cor_atual;
+			}
+		}
+	}
+	// Limpa imagem temp
+	temp.release();
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Vector3f pc, Mat im, Mat &img, Mat im360) {
 	// A partir de frustrum, calcular a posicao de cada pixel da imagem fonte em XYZ, assim como quando criavamos o plano do frustrum
 	Vector3f hor_step, ver_step; // Steps pra se andar de acordo com a resolucao da imagem
 	hor_step = (p4 - p5) / float(im.cols);
@@ -521,21 +554,26 @@ void doTheThing(float sd, Vector3f p2, Vector3f p4, Vector3f p5, Mat im, Mat &im
 			Vector3f ponto;
 			ponto = p5 + hor_step * j + ver_step * i;
 
-			// Calcular latitude e longitude da esfera de volta a partir de XYZ
-			float lat = RAD2DEG(acos(ponto[1] / ponto.norm()));
-			float lon = -RAD2DEG(atan2(ponto[2], ponto[0]));
-			lon = (lon < 0) ? lon += 360.0 : lon; // Ajustar regiao do angulo negativo, mantendo o 0 no centro da imagem
+			if ((pc - ponto).norm() < (p4 - p5).norm() / 2) {
 
-			// Pelas coordenadas, estimar posicao do pixel que deve sair na 360 final e pintar - da forma como criamos a esfera
-			int u = int(lon / sd);
-			u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
-			u = (u < 0) ? 0 : u;
-			int v = im360.rows - 1 - int(lat / sd);
-			v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
-			v = (v < 0) ? 0 : v;
-			// Pintar a imagem final com as cores encontradas
-			im360.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
-			img.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
+				// Calcular latitude e longitude da esfera de volta a partir de XYZ
+				float lat = RAD2DEG(acos(ponto[1] / ponto.norm()));
+				float lon = -RAD2DEG(atan2(ponto[2], ponto[0]));
+				lon = (lon < 0) ? lon += 360.0 : lon; // Ajustar regiao do angulo negativo, mantendo o 0 no centro da imagem
+
+				// Pelas coordenadas, estimar posicao do pixel que deve sair na 360 final e pintar - da forma como criamos a esfera
+				int u = int(lon / sd);
+				u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
+				u = (u < 0) ? 0 : u;
+				int v = im360.rows - 1 - int(lat / sd);
+				v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
+				v = (v < 0) ? 0 : v;
+				// Pintar a imagem final com as cores encontradas
+				im360.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
+				img.at<Vec3b>(Point(u, v)) = im.at<Vec3b>(Point(j, im.rows - 1 - i));
+
+			}
+
 		}
 	}
 }
@@ -551,8 +589,8 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada2/";
-	std::string arquivo_nvm = pasta + "cameras.sfm";
+	std::string pasta = "C:/Users/julia/Pictures/SANTOS_DUMONT_2/sala/scan2/";
+	std::string arquivo_nvm = pasta + "cameras_ok2.sfm";
 
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -594,62 +632,45 @@ int main(int argc, char **argv)
 			return 0;
 		}
 	}
-	// Reorganizando nvm para facilitar para mim o blending -  Colocando em linhas
+
+	int qnt_images_linha = linhas.size() / 4; //  Quantidade de Imagens por linha 
 	int i = 0;
-	int cont = 0;
 
-	while (cont < 6) {
-
+	// Reorganizando nvm/sfm para facilitar o blending -  Colocando em linhas
+	while (i < linhas.size())
+	{
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 7;
-
+		if (i >= linhas.size()) break;
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 1;
-
-		cont++;
 	}
-
-
 	i = 1;
-	cont = 0;
-
-	while (cont < 6)
+	while (i < linhas.size())
 	{
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 5;
-
+		if (i >= linhas.size()) break;
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 3;
-		cont++;
-
 	}
-
 	i = 2;
-	cont = 0;
-
-	while (cont < 6)
+	while (i < linhas.size())
 	{
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 3;
-
+		if (i >= linhas.size()) break;
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 5;
-		cont++;
-
 	}
-
 	i = 3;
-	cont = 0;
-
-	while (cont < 6)
+	while (i < linhas.size())
 	{
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 1;
-
+		if (i >= linhas.size()) break;
 		linhas_organizadas.push_back(linhas[i]);
 		i = i + 7;
-		cont++;
-
 	}
 
 	linhas = linhas_organizadas;
@@ -714,23 +735,14 @@ int main(int argc, char **argv)
 	float step_deg = 0.05; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
-	/// Para cada imagem
-	int img_num = linhas.size();
-	/*Mat* imagem_esferica = new Mat[img_num];*/
-	/*std::vector <cv::Mat> imagem_esferica;*/
-
-	Mat result1 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat result2 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat result3 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat result4 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
+	//Panoramica para cada Linha
+	vector <Mat>  im360_parcial; im360_parcial.resize(4);
 	Mat anterior = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	/*Mat anterior2 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat anterior3 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-	Mat anterior4 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);*/
-
+	Mat im360 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas sem blending 
 	int contador = 0;
-	Mat im360 = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
+
 	//ros::Time tempo = ros::Time::now();
+	/// Para cada imagem
 	auto start = chrono::steady_clock::now();
 	printf("Processando cada foto, sem print nenhum pra ir mais rapido ...\n");
 	for (int i = 0; i < nomes_imagens.size(); i++)
@@ -753,12 +765,13 @@ int main(int argc, char **argv)
 
 		// Definir o foco em dimensoes fisicas do frustrum
 		float F = R;
-		Vector3f C = Cs[i];
 		double minX, minY, maxX, maxY;
-		maxX = F * (float(image.cols) / (2.0*foco[0]));
-		minX = -maxX;
-		maxY = F * (float(image.rows) / (2.0*foco[1]));
-		minY = -maxY;
+		double dx = center[0] - double(image.cols) / 2, dy = center[1] - double(image.rows) / 2;
+		//    double dx = 0, dy = 0;
+		maxX = F * (float(image.cols) - 2 * dx) / (2.0*foco[0]);
+		minX = -F * (float(image.cols) + 2 * dx) / (2.0*foco[0]);
+		maxY = F * (float(image.rows) - 2 * dy) / (2.0*foco[1]);
+		minY = -F * (float(image.rows) + 2 * dy) / (2.0*foco[1]);
 		//		// Calcular os 4 pontos do frustrum
 		//		/*
 		//								origin of the camera = p1
@@ -781,91 +794,89 @@ int main(int argc, char **argv)
 		p5 = T * p;
 		p << 0, 0, F, 1;
 		pCenter = T * p;
+
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
-		//imagem_esferica[i] = Mat::zeros(Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas
-		//imagem_esferica.convertTo(imagem_esferica, CV_8UC3, 255.0);
 		Mat imagem_esferica = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
-		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), image, im360, imagem_esferica);		//imagem_esferica[i] = im360;
-		//imwrite("C:/dataset3/im360.png", im360 );
+		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), pCenter.block<3, 1>(0, 0), image, im360, imagem_esferica);		
+		
 		if (i == 0) {
+			dotsFilter(imagem_esferica);
 			anterior.release();
 			index = 0;
 			anterior = imagem_esferica;
 			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-			//imwrite("C:/dataset3/anterior.png", anterior * 255);
+
 		}
-		if (i > 0 && i < 12)
+		if (i > 0 && i < qnt_images_linha)
 		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica[i]);
+			dotsFilter(imagem_esferica);
 			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result1 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result1;
+			im360_parcial[0] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
+			anterior = im360_parcial[0];
 			imagem_esferica.release();
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result1 * 255);
+			
 		}
-		if (i == 12) {
-			anterior.release();
-			index = 0;
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-		}
-
-		if (i > 12 && i < 24)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result2 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result2;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result2 * 255);
-			imagem_esferica.release();
-		}
-		if (i == 24)
-		{
-			anterior.release();
-			index = 0;
-
-			anterior = imagem_esferica;
-			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
-		}
-
-		if (i > 24 && i < 36)
-		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result3 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result3;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result3 * 255);
-			imagem_esferica.release();
-
-		}
-		if (i == 36) {
+		if (i == qnt_images_linha) {
 			anterior.release();
 			index = 0;
 			anterior = imagem_esferica;
 			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
 		}
 
-		if (i > 36 && i < 48)
+		if (i > qnt_images_linha && i < 2 * qnt_images_linha)
 		{
-			//imwrite("C:/dataset3/atual.png", imagem_esferica);
 			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
-			result4 = multiband_blending(anterior, imagem_esferica, index);
-			anterior = result4;
-			//imwrite("C:/dataset3/imagem_esferica_result.png", result4 * 255);
+			im360_parcial[1] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
+			anterior = im360_parcial[1];
 			imagem_esferica.release();
-			//	//result4.convertTo(result4, CV_8UC3, 255);
+
+		}
+		if (i == 2 * qnt_images_linha)
+		{
+			anterior.release();
+			index = 0;
+			anterior = imagem_esferica;
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+		}
+
+		if (i > 2 * qnt_images_linha && i < 3 * qnt_images_linha)
+		{
+			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+			im360_parcial[2] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
+			anterior = im360_parcial[2];
+			imagem_esferica.release();
+
+		}
+		if (i == 3 * qnt_images_linha) {
+			anterior.release();
+			index = 0;
+			anterior = imagem_esferica;
+			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
+		}
+
+		if (i > 3 * qnt_images_linha && i < 4 * qnt_images_linha)
+		{
+			dotsFilter(imagem_esferica);
+			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+			im360_parcial[3] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
+			anterior = im360_parcial[3];
+			imagem_esferica.release();
+
 		}
 		index++;
 	} // Fim do for imagens;
 
-		 //Resultado Final - Juntando os blendings horizontais
+	//Resultado Final - Juntando os blendings horizontais
 	Mat result;
 	index = 73;
-	result = multiband_blending(result4, result3, index);
-	result = multiband_blending(result, result2, index);
-	result = multiband_blending(result, result1, index);
+	result = im360_parcial[3];
+	for (int i = 3; i > 0; i--) {
+
+		result = multiband_blending(result, im360_parcial[i - 1], index, qnt_images_linha);
+	}
+
 	result.convertTo(result, CV_8UC3, 255);
-	imwrite(pasta + "imagem_esferica_Blending_Res005.png", result);
+	imwrite(pasta + "imagem_esferica_Blending.png", result);
 
 	auto end = chrono::steady_clock::now();
 	//// Store the time difference between start and end
@@ -873,10 +884,9 @@ int main(int argc, char **argv)
 	cout << chrono::duration <double, milli>(diff).count() << " ms" << endl;
 	//ROS_WARN("Tempo para processar: %.2f segundos.", (ros::Time::now() - tempo).toSec());
 	// Salvando imagem esferica final
-	imwrite(pasta + "imagem_esferica_result_Homografia.png", im360);
+	imwrite(pasta + "imagem_esferica_result.png", im360);
 	printf("Processo finalizado.");
 
 	return 0;
 
 }
-
