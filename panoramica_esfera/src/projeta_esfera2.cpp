@@ -526,7 +526,7 @@ void dotsFilter(Mat &in) {
 						Vec3b c = temp.at<Vec3b>(Point(i, j));
 						if (c[0] != 0 && c[1] != 0 && c[2] != 0) {
 							r = c[0]; g = c[1]; b = c[2];
-							//r = 0; g = 255; b = 255;
+							cont = 1;
 							break;
 						}
 					}
@@ -589,7 +589,7 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/SANTOS_DUMONT_2/sala/scan2/";
+	std::string pasta = "C:/Users/julia/Pictures/SANTOS_DUMONT_2/patio/scan6/";
 	std::string arquivo_nvm = pasta + "cameras_ok2.sfm";
 
 	ifstream nvm(arquivo_nvm);
@@ -798,9 +798,9 @@ int main(int argc, char **argv)
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
 		Mat imagem_esferica = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), pCenter.block<3, 1>(0, 0), image, im360, imagem_esferica);		
-		
+		dotsFilter(imagem_esferica);
 		if (i == 0) {
-			dotsFilter(imagem_esferica);
+			
 			anterior.release();
 			index = 0;
 			anterior = imagem_esferica;
@@ -809,7 +809,7 @@ int main(int argc, char **argv)
 		}
 		if (i > 0 && i < qnt_images_linha)
 		{
-			dotsFilter(imagem_esferica);
+			
 			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
 			im360_parcial[0] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
 			anterior = im360_parcial[0];
@@ -817,6 +817,7 @@ int main(int argc, char **argv)
 			
 		}
 		if (i == qnt_images_linha) {
+			
 			anterior.release();
 			index = 0;
 			anterior = imagem_esferica;
@@ -825,6 +826,7 @@ int main(int argc, char **argv)
 
 		if (i > qnt_images_linha && i < 2 * qnt_images_linha)
 		{
+			
 			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
 			im360_parcial[1] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
 			anterior = im360_parcial[1];
@@ -841,6 +843,7 @@ int main(int argc, char **argv)
 
 		if (i > 2 * qnt_images_linha && i < 3 * qnt_images_linha)
 		{
+
 			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
 			im360_parcial[2] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
 			anterior = im360_parcial[2];
@@ -848,7 +851,8 @@ int main(int argc, char **argv)
 
 		}
 		if (i == 3 * qnt_images_linha) {
-			anterior.release();
+			
+						anterior.release();
 			index = 0;
 			anterior = imagem_esferica;
 			anterior.convertTo(anterior, CV_32F, 1.0 / 255.0);
@@ -856,8 +860,7 @@ int main(int argc, char **argv)
 
 		if (i > 3 * qnt_images_linha && i < 4 * qnt_images_linha)
 		{
-			dotsFilter(imagem_esferica);
-			imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
+				imagem_esferica.convertTo(imagem_esferica, CV_32F, 1.0 / 255.0);
 			im360_parcial[3] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
 			anterior = im360_parcial[3];
 			imagem_esferica.release();
