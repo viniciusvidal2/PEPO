@@ -798,7 +798,9 @@ int main(int argc, char **argv)
 		// Fazer tudo aqui nessa nova funcao, ja devolver a imagem esferica inclusive nesse ponto
 		Mat imagem_esferica = Mat::zeros(Size(raios_360, raios_180), CV_8UC3);
 		doTheThing(step_deg, p2.block<3, 1>(0, 0), p4.block<3, 1>(0, 0), p5.block<3, 1>(0, 0), pCenter.block<3, 1>(0, 0), image, im360, imagem_esferica);		
+		//Tirar pontos pretos quando aumenta resolução
 		dotsFilter(imagem_esferica);
+		//Começa o blending
 		if (i == 0) {
 			
 			anterior.release();
