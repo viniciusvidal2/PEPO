@@ -418,7 +418,6 @@ Mat multiband_blending(Mat a, const Mat b, int k, int qnt_images_linha) {
 	dst.convertTo(dst, CV_32FC3, 1.0 / 255.0);
 	mask[0] = dst;
 
-
 	//Filtro Gaussiano e o resultado é uma imagem reduzida com a metade do tamanho de cada dimensão
 
 	for (int i = 1; i < level_num; ++i)
@@ -589,7 +588,7 @@ int main(int argc, char **argv)
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/SANTOS_DUMONT_2/patio/scan6/";
+	std::string pasta = "C:/Users/julia/Pictures/SANTOS_DUMONT_2/patio/scan5/";
 	std::string arquivo_nvm = pasta + "cameras_ok2.sfm";
 
 	ifstream nvm(arquivo_nvm);
@@ -866,7 +865,7 @@ int main(int argc, char **argv)
 			im360_parcial[3] = multiband_blending(anterior, imagem_esferica, index, qnt_images_linha);
 			anterior = im360_parcial[3];
 			imagem_esferica.release();
-
+			imwrite("C:/dataset3/imagem_esferica_Blending.png", im360_parcial[3]*255);
 		}
 		index++;
 	} // Fim do for imagens;
@@ -895,3 +894,5 @@ int main(int argc, char **argv)
 	return 0;
 
 }
+
+
