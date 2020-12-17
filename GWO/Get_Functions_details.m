@@ -30,9 +30,11 @@ function [lb,ub,dim,fobj] = Get_Functions_details(F,roll,pitch,yaw)
 switch F
     case 'Fob'
         fobj = @Fob;
+%          lb = [ roll(2,1), yaw(2,1)-10, pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
+%         ub = [ roll(2,1), yaw(2,1)+10, pitch(2,1)+10, roll(7,1), yaw(7,1)+10,pitch(7,1)+10];
         %%%%% fx1,  fy1, cx1,  cy1, fx2, fy2,  cx2, cy2, roll1, pitch1,    yaw1,     roll2, pitch2,   yaw2
-        lb = [1327, 1349, 920, 500, 1327, 1349, 920, 500, roll(2,1),  yaw(2,1)-10,pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
-        ub = [1527, 1549, 990, 580, 1527, 1549, 990, 580, roll(2,1),   yaw(2,1)+10,pitch(2,1)+10, roll(7,1),yaw(7,1)+10,pitch(7,1)+10];
+        lb = [1377, 1399, 930, 510, 1377, 1399, 930, 510, roll(2,1),  yaw(2,1)-10,pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
+        ub = [1477, 1499, 990, 570, 1477, 1499, 990, 570, roll(2,1),   yaw(2,1)+10,pitch(2,1)+10, roll(7,1),yaw(7,1)+10,pitch(7,1)+10];
         dim = 14;%fx1, fy1, cx1, cy1, fx2, fy2, cx2,cy2,roll1,pitch1,yaw1,roll2,pitch2,yaw2
 end
 
@@ -40,7 +42,8 @@ end
 function o = Fob(x,matches,kpt1,kpt2,image1,image2,im360)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%FOB%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Match em questao
-[m,n] = size(matches);
+
+[m,n] = size(kpt1);
 
 for j = 1:m
     
@@ -48,8 +51,8 @@ for j = 1:m
     b = matches(j,1)+1;
     
     % Keypoints
-    kp1 = kpt1(a,:);
-    kp2 = kpt2(b,:);
+    kp1 = kpt1(j,:);
+    kp2 = kpt2(j,:);
     %% Pose da CAMERA 1, so existe aqui rotacao, vamos suprimir as translacoes
     % pois serao irrelevantes e serao compensadas por outros dados
     
@@ -61,7 +64,7 @@ for j = 1:m
     [rows1 cols1,numberOfColorChannels] = size(image1);
     dx1 = x(3) - double(cols1) / 2;
     dy1 = x(4) - double(rows1) / 2;
-    
+
     maxX = ((cols1) - 2*dx1) / (2.0 * x(1));
     minX = ((cols1) + 2*dx1) / (2.0 * x(1));
     maxY = ((rows1) - 2*dy1) / (2.0 * x(2));
@@ -132,7 +135,7 @@ for j = 1:m
     minX = ((cols2) + 2*dx2) / (2.0 * x(5));
     maxY = ((rows2) - 2*dy2) / (2.0 * x(6));
     minY = ((rows2) + 2*dy2) / (2.0 * x(6));
-    
+   
     F = 1;
     p =[ 0, 0, 0]';
     p1 = r2 * p; % Nao usado a principio, pode omitir
@@ -186,8 +189,10 @@ for j = 1:m
     ponto_fc2(j,:) =[ u, v ];
     
 end
+p1_norm = normalize(ponto_fc1,'range');
+p2_norm = normalize(ponto_fc2,'range');
+o =  norm((p1_norm - p2_norm));
 
-o =  norm((ponto_fc1 - ponto_fc2));;
 end
 
 

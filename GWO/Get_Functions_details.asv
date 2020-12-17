@@ -30,45 +30,57 @@ function [lb,ub,dim,fobj] = Get_Functions_details(F,roll,pitch,yaw)
 switch F
     case 'Fob'
         fobj = @Fob;
+         lb = [ roll(2,1), yaw(2,1)-10, pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
+        ub = [ roll(2,1), yaw(2,1)+10, pitch(2,1)+10, roll(7,1), yaw(7,1)+10,pitch(7,1)+10];
         %%%%% fx1,  fy1, cx1,  cy1, fx2, fy2,  cx2, cy2, roll1, pitch1,    yaw1,     roll2, pitch2,   yaw2
-        %         lb = [1327, 1349, 940, 520, 1327, 1349, 940, 520, 0,   -0.455737, -0.0368156, 0, 0.00336038, -0.0368156];
-        %         ub = [1527, 1549, 980, 560, 1527, 1549, 980, 560, 0, -0.486416, -0.0674952, 0, 0.00292408, -0.0674952];
-        lb = [1327, 1349, 920, 500, 1327, 1349, 920, 500, roll(2,1),  yaw(2,1)-10,pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
-        ub = [1527, 1549, 990, 580, 1527, 1549, 990, 580, roll(2,1),   yaw(2,1)+10,pitch(2,1)+10, roll(7,1),yaw(7,1)+10,pitch(7,1)+10];
-        
-        dim = 14;%fx1, fy1, cx1, cy1, fx2, fy2, cx2,cy2,roll1,pitch1,yaw1,roll2,pitch2,yaw2
+%         lb = [1377, 1399, 930, 510, 1377, 1399, 930, 510, roll(2,1),  yaw(2,1)-10,pitch(2,1)-10, roll(7,1), yaw(7,1)-10,pitch(7,1)-10];
+%         ub = [1477, 1499, 990, 570, 1477, 1499, 990, 570, roll(2,1),   yaw(2,1)+10,pitch(2,1)+10, roll(7,1),yaw(7,1)+10,pitch(7,1)+10];
+        dim = 6;%fx1, fy1, cx1, cy1, fx2, fy2, cx2,cy2,roll1,pitch1,yaw1,roll2,pitch2,yaw2
 end
 
 end
 function o = Fob(x,matches,kpt1,kpt2,image1,image2,im360)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%FOB%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Match em questao
-[m,n] = size(matches);
-erro =0;
+
+[m,n] = size(kpt1);
+
 for j = 1:m
-    
+    fx1 = 1427.099976;
+    fy1 = 1449.400024;
+    cx1 = 987.900024;
+    cy1 = 579.400024;
+    fx2 = 1427.099976;
+    fy2 = 1449.400024;
+    cx2 = 987.900024;
+    cy2 = 579.400024;
     a = matches(j,2)+1; % no matlab começa no index 1, pegou index do c++ que começa no zero;
     b = matches(j,1)+1;
     
     % Keypoints
-    kp1 = kpt1(a,:);
-    kp2 = kpt2(b,:);
+    kp1 = kpt1(j,:);
+    kp2 = kpt2(j,:);
     %% Pose da CAMERA 1, so existe aqui rotacao, vamos suprimir as translacoes
     % pois serao irrelevantes e serao compensadas por outros dados
     
     step_deg = 0.1;
   
-    r1 = eul2rotm([x(9),- deg2rad(raw2deg(x(10), 'pan')),- deg2rad(raw2deg(x(11), 'tilt'))] );
+    r1 = eul2rotm([x(1),- deg2rad(raw2deg(x(2), 'pan')),- deg2rad(raw2deg(x(3), 'tilt'))] );
     % // Vamos criar o frustrum da CAMERA 1, assim como nas nossas funcoes, como o desenho do github
     % // Supondo a variavel F e o raio da esfera como F = R = 1, nao interferiu nas experiencias
     [rows1 cols1,numberOfColorChannels] = size(image1);
-    dx1 = x(3) - double(cols1) / 2;
-    dy1 = x(4) - double(rows1) / 2;
-    
-    maxX = ((cols1) - 2*dx1) / (2.0 * x(1));
-    minX = ((cols1) + 2*dx1) / (2.0 * x(1));
-    maxY = ((rows1) - 2*dy1) / (2.0 * x(2));
-    minY = ((rows1) + 2*dy1) / (2.0 * x(2));
+%     dx1 = x(3) - double(cols1) / 2;
+%     dy1 = x(4) - double(rows1) / 2;
+dx1 = cx1 - double(cols1) / 2;
+dy1 = cy1 - double(rows1) / 2;
+maxX = ((cols1) - 2*dx1) / (2.0 * fx1);
+minX = ((cols1) + 2*dx1) / (2.0 * fx1);
+maxY = ((rows1) - 2*dy1) / (2.0 * fy1);
+minY = ((rows1) + 2*dy1) / (2.0 * fy1);
+%     maxX = ((cols1) - 2*dx1) / (2.0 * x(1));
+%     minX = ((cols1) + 2*dx1) / (2.0 * x(1));
+%     maxY = ((rows1) - 2*dy1) / (2.0 * x(2));
+%     minY = ((rows1) + 2*dy1) / (2.0 * x(2));
     
     F = 1;
     p =[ 0, 0, 0]';
@@ -124,18 +136,23 @@ for j = 1:m
     ponto_fc1(j,:) = [ u, v ];
     %% Pose da CAMERA 2, so existe aqui rotacao, vamos suprimir as translacoes
     % pois serao irrelevantes e serao compensadas por outros dados
-       r2 = eul2rotm([x(12),- deg2rad(raw2deg(x(13), 'pan')),- deg2rad(raw2deg(x(14), 'tilt'))] );
+       r2 = eul2rotm([x(4),- deg2rad(raw2deg(x(5), 'pan')),- deg2rad(raw2deg(x(6), 'tilt'))] );
     % // Vamos criar o frustrum da CAMERA 1, assim como nas nossas funcoes, como o desenho do github
     % // Supondo a variavel F e o raio da esfera como F = R = 1, nao interferiu nas experiencias
     [rows2 cols2,numberOfColorChannels] = size(image2);
-    dx2 = x(7) - double(cols2) / 2;
-    dy2 = x(8) - double(rows2) / 2;
-    
-    maxX = ((cols2) - 2*dx2) / (2.0 * x(5));
-    minX = ((cols2) + 2*dx2) / (2.0 * x(5));
-    maxY = ((rows2) - 2*dy2) / (2.0 * x(6));
-    minY = ((rows2) + 2*dy2) / (2.0 * x(6));
-    
+%     dx2 = x(7) - double(cols2) / 2;
+%     dy2 = x(8) - double(rows2) / 2;
+%     
+%     maxX = ((cols2) - 2*dx2) / (2.0 * x(5));
+%     minX = ((cols2) + 2*dx2) / (2.0 * x(5));
+%     maxY = ((rows2) - 2*dy2) / (2.0 * x(6));
+%     minY = ((rows2) + 2*dy2) / (2.0 * x(6));
+     dx2 = cx2 - double(cols1) / 2;
+dy2 = cy2 - double(rows1) / 2;
+maxX = ((cols1) - 2*dx1) / (2.0 * fx2);
+minX = ((cols1) + 2*dx1) / (2.0 * fx2);
+maxY = ((rows1) - 2*dy1) / (2.0 * fy2);
+minY = ((rows1) + 2*dy1) / (2.0 * fy2);
     F = 1;
     p =[ 0, 0, 0]';
     p1 = r2 * p; % Nao usado a principio, pode omitir
@@ -189,8 +206,9 @@ for j = 1:m
     ponto_fc2(j,:) =[ u, v ];
     
 end
-figure, imshow(im360);
-o =  norm((ponto_fc1 - ponto_fc2));;
+
+o =  norm((ponto_fc1 - ponto_fc2));
+
 end
 
 

@@ -60,6 +60,7 @@ l=0;% Loop counter
 
 % Main loop
 while l<Max_iter
+   
     for i=1:size(Positions,1)
         
         %        Return back the search agents that go beyond the boundaries of the search space
@@ -104,7 +105,7 @@ while l<Max_iter
     end
     
     
-    a=2-l*((2)/Max_iter); % a decreases linearly fron 2 to 0
+    a= 2-l*((2)/Max_iter); % a decreases linearly fron 2 to 0
     
     % Update the Position of search agents including omegas
     for i=1:size(Positions,1)
@@ -143,6 +144,7 @@ while l<Max_iter
     end
     l=l+1;
     Convergence_curve(l) = Alpha_score;
+    
 end
 
 
