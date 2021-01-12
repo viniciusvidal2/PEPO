@@ -37,7 +37,8 @@
 class Utils {
 
 public:
-	static double GenerateRandomNumber();
+	static Eigen::Vector3d pointAngle(std::vector<int> pose, double R, Eigen::Vector2f center, int cols, int rows, Eigen::Vector2f foco);
+	/*static double GenerateRandomNumber();
 	static double *Create1DZeroArray(unsigned int columnCount);
 	static double **Create2DRandomArray(unsigned int rowCount, unsigned int columnCount, Boundaries boundaries[]);
 	static void Clip1DArray(double array[], unsigned int columnCount, Boundaries boundaries[]);
@@ -47,5 +48,6 @@ public:
 	static void calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector<std::vector<cv::KeyPoint> >  &kpts_src, std::vector<std::string> imagens_src);
 	static std::vector<std::vector<std::vector<cv::KeyPoint>>> surf_matches_matrix_encontrar_melhor(std::vector<std::vector<  std::vector<cv::DMatch> >> matriz_matches, std::vector<cv::Mat>  descp_src, std::vector< std::vector<cv::KeyPoint> >  kpts_src, std::vector<std::string> imagens_src, std::vector<std::vector<int>> &indices);
 	static void filtrar_matches_keypoints_repetidos(std::vector<cv::KeyPoint> &kt, std::vector<cv::KeyPoint> &ks, std::vector<cv::DMatch> &m);
+	*/
 };
 #endif

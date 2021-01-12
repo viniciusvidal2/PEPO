@@ -57,20 +57,40 @@ Benchmark* fob::Create() {
 }
 
 fob::fob() : Benchmark() {
+	//Limits of variable values
 	boundaries_m = new Boundaries[variablesCount_m];
-	//fx1, fy1, cx1, cy1, fx2, fy2, cx2, cy2, roll1, pitch1, yaw1, roll2, pitch2, yaw2
+	//yaw, pitch, fx, fy, cx, cy - de todas as imagens 
 	std::vector<std::vector<int> > pose = Utils::FindPoseRaw();
 	std::vector<double> pitch, yaw;
-	for (int j = 0; j < pose.size(); j++) {
-
-		pitch.push_back(pose[j][1]);
-		yaw.push_back(pose[j][2]);
-
-	}
+	std::vector<double> lb, up;
 	double cx, cy, fx, fy;
 	fx = 1427.099976; fy = 1449.400024; cx = 960; cy = 540;
-	std::vector<double> lb{ yaw[1] - 10, pitch[1] - 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] - 10, pitch[6] - 10,fx-100,fy-100,cx-20,cy-20 };
-	std::vector<double> up{ yaw[1] + 10, pitch[1] + 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] + 10, pitch[6] + 10,fx + 100,fy + 100,cx + 20,cy + 20 };
+
+	for (int j = 0; j < pose.size(); j++) {
+
+		/*pitch.push_back(pose[j][1]);
+		yaw.push_back(pose[j][2]);*/
+		//lower bound
+		lb.push_back(pose[j][2] - 10);//yaw
+		lb.push_back(pose[j][1] - 10);//pitch
+		lb.push_back(fx - 100); // foco x
+		lb.push_back(fy - 100); //foco y
+		lb.push_back(cx - 20); // centro x
+		lb.push_back(cy - 20); // centro y
+
+		// upper bound
+		up.push_back(pose[j][2] + 10);
+		up.push_back(pose[j][1] + 10);
+		up.push_back(fx + 100);
+		up.push_back(fy + 100);
+		up.push_back(cx + 20);
+		up.push_back(cy + 20);
+
+	}
+
+
+	//std::vector<double> lb{ yaw[1] - 10, pitch[1] - 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] - 10, pitch[6] - 10,fx-100,fy-100,cx-20,cy-20 };
+	//std::vector<double> up{ yaw[1] + 10, pitch[1] + 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] + 10, pitch[6] + 10,fx + 100,fy + 100,cx + 20,cy + 20 };
 
 	for (register unsigned int variable = 0; variable < variablesCount_m; variable++) {
 		boundaries_m[variable].lowerBound = lb[variable], boundaries_m[variable].upperBound = up[variable];
@@ -193,114 +213,117 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 	//double erro = 0;
 	std::vector<double> erro;
 	erro.resize(bestKey.size());
-	
-	for (size_t frame0 = currentCamera; frame0 < bestKey.size(); frame0++)
+#pragma omp parallel for 
+	for (int frame0 = currentCamera; frame0 < bestKey.size(); frame0++)
 	{
 		erro[frame0] = 0;
-		
+
 		int l = 0;
-		
-			for (int j = 0; j < bestKey[frame0].size(); j++)
-			{
-				std::vector<cv::KeyPoint> kpts1 = bestKey[0][j];
-				std::vector<cv::KeyPoint> kpts2 = bestKey[0][j + 1];
-				int frame1 = indices[frame0][l];
-				if (bestKey[frame0][j].size() > 20) {
-				int m = kpts1.size();
+
+		for (int j = 0; j < bestKey[frame0].size(); j++)
+		{
+			std::vector<cv::KeyPoint> kpts1 = bestKey[frame0][j];
+			std::vector<cv::KeyPoint> kpts2 = bestKey[frame0][j + 1];
+			int frame1 = indices[frame0][l];
+			/*if (bestKey[frame0][j].size() > 20)
+			{*/
+			int m = kpts1.size();
 #pragma omp parallel for 
-				for (int k = 0; k < m; k++) {
+			for (int k = 0; k < m; k++)
+			{
 
-					cv::KeyPoint kp1 = kpts1[k];
-					cv::KeyPoint kp2 = kpts2[k];
+				cv::KeyPoint kp1 = kpts1[k];
+				cv::KeyPoint kp2 = kpts2[k];
 
-					double dx1 = x[frame0*6+4] - double(image1.cols) / 2, dy1 = x[frame0*6+5] - double(image1.rows) / 2;
+				double dx1 = x[frame0 * 6 + 4] - double(image1.cols) / 2, dy1 = x[frame0 * 6 + 5] - double(image1.rows) / 2;
 
-					double maxX = (float(image1.cols) - 2 * dx1) / (2.0 * x[frame0*6 + 2]);
-					double minX = (float(image1.cols) + 2 * dx1) / (2.0 * x[frame0 *6 + 2]);
-					double maxY = (float(image1.rows) - 2 * dy1) / (2.0 * x[frame0*6 + 3]);
-					double minY = (float(image1.rows) + 2 * dy1) / (2.0 * x[frame0*6 + 3]);
+				double maxX = (float(image1.cols) - 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
+				double minX = (float(image1.cols) + 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
+				double maxY = (float(image1.rows) - 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
+				double minY = (float(image1.rows) + 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
 
-					Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;
-					float F = 1;
-					p2 << minX, minY, F;
-					p4 << maxX, maxY, F;
-					p5 << minX, maxY, F;
+				Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;
+				float F = 1;
+				p2 << minX, minY, F;
+				p4 << maxX, maxY, F;
+				p5 << minX, maxY, F;
 
-					float step_deg = 0.1;
-					// Ponto no frustrum 3D correspondente a feature na imagem 1 em 2D
-					Eigen::Vector3d ponto3d = p5 + (p4 - p5) * kp1.pt.x / image1.cols + (p2 - p5) * kp1.pt.y / image1.rows;
-					// Latitude e longitude no 360
-					double lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())), lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
-					lon = (lon < 0) ? lon += 360.0 : lon;
-					lat = lat - DEG2RAD(Utils::raw2deg(x[frame0*6+1], "pan"));
-					lon = lon + DEG2RAD(Utils::raw2deg(x[frame0*6], "tilt"));
+				float step_deg = 0.1;
+				// Ponto no frustrum 3D correspondente a feature na imagem 1 em 2D
+				Eigen::Vector3d ponto3d = p5 + (p4 - p5) * kp1.pt.x / image1.cols + (p2 - p5) * kp1.pt.y / image1.rows;
+				// Latitude e longitude no 360
+				double lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())), lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
+				lon = (lon < 0) ? lon += 360.0 : lon;
+				lat = lat - DEG2RAD(Utils::raw2deg(x[frame0 * 6 + 1], "pan"));
+				lon = lon + DEG2RAD(Utils::raw2deg(x[frame0 * 6], "tilt"));
 
-					int u = int(lon / step_deg), v = im360.rows - 1 - int(lat / step_deg);
-					u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
-					u = (u < 0) ? 0 : u;
-					v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
-					v = (v < 0) ? 0 : v;
-					// Ponto na imagem 360 devido a camera 1, finalmente apos as contas, armazenar
-					Eigen::Vector2d ponto_fc1{ u, v };
-					ponto_fc1.normalize();
-					//pp1[j] = ponto_fc1;
-					// ------------------------------------------------------------------------------------------------
+				int u = int(lon / step_deg), v = im360.rows - 1 - int(lat / step_deg);
+				u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
+				u = (u < 0) ? 0 : u;
+				v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
+				v = (v < 0) ? 0 : v;
+				// Ponto na imagem 360 devido a camera 1, finalmente apos as contas, armazenar
+				Eigen::Vector2d ponto_fc1{ u, v };
+				ponto_fc1.normalize();
+				//pp1[j] = ponto_fc1;
+				// ------------------------------------------------------------------------------------------------
 
-					// Pose da CAMERA 2, so existe aqui rotacao, vamos suprimir as translacoes 
-					// pois serao irrelevantes e serao compensadas por outros dados
+				// Pose da CAMERA 2, so existe aqui rotacao, vamos suprimir as translacoes 
+				// pois serao irrelevantes e serao compensadas por outros dados
 
-					double dx2 = x[frame1*6+4] - double(image2.cols) / 2, dy2 = x[frame1*6+5] - double(image2.rows) / 2;
+				double dx2 = x[frame1 * 6 + 4] - double(image2.cols) / 2, dy2 = x[frame1 * 6 + 5] - double(image2.rows) / 2;
 
-					maxX = (float(image2.cols) - 2 * dx2) / (2.0 * x[frame1*6+2]);
-					minX = (float(image2.cols) + 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
-					maxY = (float(image2.rows) - 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
-					minY = (float(image2.rows) + 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
+				maxX = (float(image2.cols) - 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
+				minX = (float(image2.cols) + 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
+				maxY = (float(image2.rows) - 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
+				minY = (float(image2.rows) + 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
 
 
-					p2 << minX, minY, F;
-					p4 << maxX, maxY, F;
-					p5 << minX, maxY, F;
-					// Nao usado a principio, pode omitir
+				p2 << minX, minY, F;
+				p4 << maxX, maxY, F;
+				p5 << minX, maxY, F;
+				// Nao usado a principio, pode omitir
 
-					// Ponto no frustrum 3D correspondente a feature na imagem 2 em 2D
-					ponto3d = p5 + (p4 - p5) * kp2.pt.x / image2.cols + (p2 - p5) * kp2.pt.y / image2.rows;
-					// Latitude e longitude no 360
-					lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())); lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
-					lon = (lon < 0) ? lon += 360.0 : lon;
-					lat = lat - DEG2RAD(Utils::raw2deg(x[frame1*6+1], "pan"));
-					lon = lon + DEG2RAD(Utils::raw2deg(x[frame1*6], "tilt"));
-					u = int(lon / step_deg); v = im360.rows - 1 - int(lat / step_deg);
-					u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
-					u = (u < 0) ? 0 : u;
-					v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
-					v = (v < 0) ? 0 : v;
-					// Ponto na imagem 360 devido a camera 2, finalmente apos as contas, armazenar
-					Eigen::Vector2d ponto_fc2{ u, v };
-					ponto_fc2.normalize();
-					// pp2[j] = ponto_fc2;
-					/// RESULTADO FINAL, para ir formando a FOB, com o somatorio do erro entre os pontos
-					///
+				// Ponto no frustrum 3D correspondente a feature na imagem 2 em 2D
+				ponto3d = p5 + (p4 - p5) * kp2.pt.x / image2.cols + (p2 - p5) * kp2.pt.y / image2.rows;
+				// Latitude e longitude no 360
+				lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())); lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
+				lon = (lon < 0) ? lon += 360.0 : lon;
+				lat = lat - DEG2RAD(Utils::raw2deg(x[frame1 * 6 + 1], "pan"));
+				lon = lon + DEG2RAD(Utils::raw2deg(x[frame1 * 6], "tilt"));
+				u = int(lon / step_deg); v = im360.rows - 1 - int(lat / step_deg);
+				u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
+				u = (u < 0) ? 0 : u;
+				v = (v >= im360.rows) ? im360.rows - 1 : v; // Nao deixar passar do limite de linhas por seguranca
+				v = (v < 0) ? 0 : v;
+				// Ponto na imagem 360 devido a camera 2, finalmente apos as contas, armazenar
+				Eigen::Vector2d ponto_fc2{ u, v };
+				ponto_fc2.normalize();
+				// pp2[j] = ponto_fc2;
+				/// RESULTADO FINAL, para ir formando a FOB, com o somatorio do erro entre os pontos
+				///
 
-					//Eigen::Vector2d p1_norm = ponto_fc2.normalize();  //normalize(ponto_fc1, ponto_fc1.minCoeff() , ponto_fc1.maxCoeff());
-					//Eigen::Vector2d p2_norm = normalize(ponto_fc2, ponto_fc2.minCoeff(), ponto_fc2.maxCoeff());
-					/* erro = erro + (pp1[j] - pp2[j]).norm();*/
-					erro[frame0] = erro[frame0] + (ponto_fc1 - ponto_fc2).norm();
+				//Eigen::Vector2d p1_norm = ponto_fc2.normalize();  //normalize(ponto_fc1, ponto_fc1.minCoeff() , ponto_fc1.maxCoeff());
+				//Eigen::Vector2d p2_norm = normalize(ponto_fc2, ponto_fc2.minCoeff(), ponto_fc2.maxCoeff());
+				/* erro = erro + (pp1[j] - pp2[j]).norm();*/
+				erro[frame0] = erro[frame0] + ((ponto_fc1 - ponto_fc2).norm());
 
-					
 
-				}
-				l++;
-				j++;
+
+				/*}*/
 				
+
 			}
+			l++;
+			j++;
 		}
-		
-		
+
+
 
 	}
 	double erroT;
 	//media dos erros de cada camera
-	erroT = std::accumulate(erro.begin(), erro.end(), 0.0)/erro.size();
+	erroT = std::accumulate(erro.begin(), erro.end(), 0.0) / erro.size();
 	auto finish_time = std::chrono::high_resolution_clock::now();
 	auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
 	//std::cout <<"fob "<< time<<"\n";
