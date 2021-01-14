@@ -37,6 +37,7 @@ Argument::Argument(int argc, char **argv) {
     benchmark_m = nullptr;
     debug_m = false;
 	
+	
 }
 
 Argument::~Argument() {
@@ -74,7 +75,7 @@ void Argument::Parse() {
         } else if(strcasecmp(argv_m[index],"-population_size")==0) {
             index += 1;
             char *size=argv_m[index];
-			std::cout << size << std::endl;
+		
             if(size == NULL) {
                 throw GWOException(MISSING_POPULATION);
             }
@@ -85,7 +86,7 @@ void Argument::Parse() {
         } else if(strcasecmp(argv_m[index],"-iterations")==0) {
             index += 1;
             char *itr=argv_m[index];
-			std::cout << itr << std::endl;
+			
             if(itr == NULL) {
                 throw GWOException(MISSING_ITERATIONS);
             }

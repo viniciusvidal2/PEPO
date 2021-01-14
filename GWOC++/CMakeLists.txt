@@ -19,12 +19,12 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${PCL_INCLUDE_DIRS})
 
 SET(HEADERS_BENCHMARK "${CMAKE_SOURCE_DIR}/include/benchmark")
-include_directories("C:/Users/julia/Downloads/gwo-main/include")
-include_directories(HEADERS)
-include_directories(HEADERS_BENCHMARK)
+include_directories("${CMAKE_SOURCE_DIR}/include/")
 SET(HEADERS
    include/argument.hpp  include/benchmark.hpp  include/benchmarkFactory.hpp   include/gwo.hpp  include/GWOException.hpp  include/utils.hpp include/benchmark/fob.hpp 
 )
+include_directories(HEADERS)
+include_directories(HEADERS_BENCHMARK)
 add_executable(main  ${HEADERS} src/main.cc src/argument.cc src/benchmark.cc src/benchmarkFactory.cc  src/gwo.cc src/GWOException.cc src/utils.cc benchmark/fob.cc)
 target_compile_options(main PRIVATE ${OpenMP_FLAGS})
 target_link_libraries(main    ${OpenCV_LIBS} ${PCL_LIBRARIES} ${OpenCV_LIBS} ${OpenMP_LIBS})

@@ -44,7 +44,7 @@
             double **positions_m;
             double *convergenceCurve_m;
 	
-            void calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, cv::Mat image1, cv::Mat image2, std::vector<std::vector<int>> indices);
+            void calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices);
             void updateWolves(double a);
 
         public:

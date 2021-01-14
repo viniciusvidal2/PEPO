@@ -68,8 +68,6 @@ fob::fob() : Benchmark() {
 
 	for (int j = 0; j < pose.size(); j++) {
 
-		/*pitch.push_back(pose[j][1]);
-		yaw.push_back(pose[j][2]);*/
 		//lower bound
 		lb.push_back(pose[j][2] - 10);//yaw
 		lb.push_back(pose[j][1] - 10);//pitch
@@ -87,10 +85,6 @@ fob::fob() : Benchmark() {
 		up.push_back(cy + 20);
 
 	}
-
-
-	//std::vector<double> lb{ yaw[1] - 10, pitch[1] - 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] - 10, pitch[6] - 10,fx-100,fy-100,cx-20,cy-20 };
-	//std::vector<double> up{ yaw[1] + 10, pitch[1] + 10,fx - 100,fy - 100,cx - 20,cy - 20, yaw[6] + 10, pitch[6] + 10,fx + 100,fy + 100,cx + 20,cy + 20 };
 
 	for (register unsigned int variable = 0; variable < variablesCount_m; variable++) {
 		boundaries_m[variable].lowerBound = lb[variable], boundaries_m[variable].upperBound = up[variable];
@@ -206,15 +200,15 @@ fob::~fob() {
 ////std::cout <<"fob "<< time<<"\n";
 //return erro;
 //}
-double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, cv::Mat image1, cv::Mat image2, std::vector<std::vector<int>> indices) {
-	int currentCamera = 0;
-	auto start_time = std::chrono::high_resolution_clock::now();
+double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices) {
+	
+	//auto start_time = std::chrono::high_resolution_clock::now();
 
 	//double erro = 0;
 	std::vector<double> erro;
 	erro.resize(bestKey.size());
 #pragma omp parallel for 
-	for (int frame0 = currentCamera; frame0 < bestKey.size(); frame0++)
+	for (int frame0 = 0; frame0 < bestKey.size(); frame0++)
 	{
 		erro[frame0] = 0;
 
@@ -225,37 +219,38 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 			std::vector<cv::KeyPoint> kpts1 = bestKey[frame0][j];
 			std::vector<cv::KeyPoint> kpts2 = bestKey[frame0][j + 1];
 			int frame1 = indices[frame0][l];
-			/*if (bestKey[frame0][j].size() > 20)
-			{*/
-			int m = kpts1.size();
+
+			
 #pragma omp parallel for 
-			for (int k = 0; k < m; k++)
+			for (int k = 0; k < kpts1.size(); k++)
 			{
 
 				cv::KeyPoint kp1 = kpts1[k];
 				cv::KeyPoint kp2 = kpts2[k];
 
-				double dx1 = x[frame0 * 6 + 4] - double(image1.cols) / 2, dy1 = x[frame0 * 6 + 5] - double(image1.rows) / 2;
+				double dx1 = x[frame0 * 6 + 4] - double(cols) / 2, dy1 = x[frame0 * 6 + 5] - double(rows) / 2;
 
-				double maxX = (float(image1.cols) - 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
-				double minX = (float(image1.cols) + 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
-				double maxY = (float(image1.rows) - 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
-				double minY = (float(image1.rows) + 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
+				double maxX = (float(cols) - 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
+				double minX = (float(cols) + 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
+				double maxY = (float(rows) - 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
+				double minY = (float(rows) + 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
 
-				Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;
+				/*	Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;*/
 				float F = 1;
-				p2 << minX, minY, F;
+				/*p2 << minX, minY, F;
 				p4 << maxX, maxY, F;
-				p5 << minX, maxY, F;
+				p5 << minX, maxY, F;*/
 
 				float step_deg = 0.1;
 				// Ponto no frustrum 3D correspondente a feature na imagem 1 em 2D
-				Eigen::Vector3d ponto3d = p5 + (p4 - p5) * kp1.pt.x / image1.cols + (p2 - p5) * kp1.pt.y / image1.rows;
+				Eigen::Vector3d ponto3d;
+				// Conta aberta - = p5 + (p4 - p5) * kp1.pt.x / cols + (p2 - p5) * kp1.pt.y / rows;
+				ponto3d << minX + (maxX - minX)*(kp1.pt.x / cols), maxY + (minY - maxY)*(kp1.pt.y / rows), F;
 				// Latitude e longitude no 360
 				double lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())), lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
 				lon = (lon < 0) ? lon += 360.0 : lon;
-				lat = lat - DEG2RAD(Utils::raw2deg(x[frame0 * 6 + 1], "pan"));
-				lon = lon + DEG2RAD(Utils::raw2deg(x[frame0 * 6], "tilt"));
+				lat = lat - DEG2RAD(Utils::raw2deg(x[frame0 * 6 + 1], "tilt"));
+				lon = lon + DEG2RAD(Utils::raw2deg(x[frame0 * 6], "pan"));
 
 				int u = int(lon / step_deg), v = im360.rows - 1 - int(lat / step_deg);
 				u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
@@ -265,32 +260,37 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 				// Ponto na imagem 360 devido a camera 1, finalmente apos as contas, armazenar
 				Eigen::Vector2d ponto_fc1{ u, v };
 				ponto_fc1.normalize();
-				//pp1[j] = ponto_fc1;
+
 				// ------------------------------------------------------------------------------------------------
 
 				// Pose da CAMERA 2, so existe aqui rotacao, vamos suprimir as translacoes 
 				// pois serao irrelevantes e serao compensadas por outros dados
 
-				double dx2 = x[frame1 * 6 + 4] - double(image2.cols) / 2, dy2 = x[frame1 * 6 + 5] - double(image2.rows) / 2;
+				double dx2 = x[frame1 * 6 + 4] - double(cols) / 2, dy2 = x[frame1 * 6 + 5] - double(rows) / 2;
 
-				maxX = (float(image2.cols) - 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
-				minX = (float(image2.cols) + 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
-				maxY = (float(image2.rows) - 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
-				minY = (float(image2.rows) + 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
+				maxX = (float(cols) - 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
+				minX = (float(cols) + 2 * dx2) / (2.0 * x[frame1 * 6 + 2]);
+				maxY = (float(rows) - 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
+				minY = (float(rows) + 2 * dy2) / (2.0 * x[frame1 * 6 + 3]);
 
 
-				p2 << minX, minY, F;
+				/*p2 << minX, minY, F;
 				p4 << maxX, maxY, F;
-				p5 << minX, maxY, F;
+				p5 << minX, maxY, F;*/
 				// Nao usado a principio, pode omitir
 
 				// Ponto no frustrum 3D correspondente a feature na imagem 2 em 2D
-				ponto3d = p5 + (p4 - p5) * kp2.pt.x / image2.cols + (p2 - p5) * kp2.pt.y / image2.rows;
+				//ponto3d = p5 + (p4 - p5) * kp2.pt.x / cols + (p2 - p5) * kp2.pt.y / rows;
+				//conta aberta - teste
+				ponto3d << minX + (maxX - minX)*(kp2.pt.x / cols), maxY + (minY - maxY)*(kp2.pt.y / rows), F;
+							   
 				// Latitude e longitude no 360
 				lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())); lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
 				lon = (lon < 0) ? lon += 360.0 : lon;
-				lat = lat - DEG2RAD(Utils::raw2deg(x[frame1 * 6 + 1], "pan"));
-				lon = lon + DEG2RAD(Utils::raw2deg(x[frame1 * 6], "tilt"));
+				float teste1 = x[frame1 * 6+1];
+				double teste = (Utils::raw2deg(x[frame1 * 6 ], "tilt"));
+				lat = lat - DEG2RAD(Utils::raw2deg(x[frame1 * 6 + 1], "tilt"));
+				lon = lon + DEG2RAD(Utils::raw2deg(x[frame1 * 6], "pan"));
 				u = int(lon / step_deg); v = im360.rows - 1 - int(lat / step_deg);
 				u = (u >= im360.cols) ? im360.cols - 1 : u; // Nao deixar passar do limite de colunas por seguranca
 				u = (u < 0) ? 0 : u;
@@ -299,33 +299,20 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 				// Ponto na imagem 360 devido a camera 2, finalmente apos as contas, armazenar
 				Eigen::Vector2d ponto_fc2{ u, v };
 				ponto_fc2.normalize();
-				// pp2[j] = ponto_fc2;
+
 				/// RESULTADO FINAL, para ir formando a FOB, com o somatorio do erro entre os pontos
-				///
 
-				//Eigen::Vector2d p1_norm = ponto_fc2.normalize();  //normalize(ponto_fc1, ponto_fc1.minCoeff() , ponto_fc1.maxCoeff());
-				//Eigen::Vector2d p2_norm = normalize(ponto_fc2, ponto_fc2.minCoeff(), ponto_fc2.maxCoeff());
-				/* erro = erro + (pp1[j] - pp2[j]).norm();*/
 				erro[frame0] = erro[frame0] + ((ponto_fc1 - ponto_fc2).norm());
-
-
-
-				/*}*/
-				
-
 			}
 			l++;
 			j++;
 		}
-
-
-
 	}
 	double erroT;
 	//media dos erros de cada camera
 	erroT = std::accumulate(erro.begin(), erro.end(), 0.0) / erro.size();
-	auto finish_time = std::chrono::high_resolution_clock::now();
-	auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
+	//auto finish_time = std::chrono::high_resolution_clock::now();
+	//auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
 	//std::cout <<"fob "<< time<<"\n";
 	return erroT;
 }

@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/dataset3/";
+	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada2/";
 	std::string arquivo_nvm = pasta + "cameras.sfm";
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -103,17 +103,18 @@ int main(int argc, char **argv) {
 			return 0;
 		}
 	}
+	
 	//Salvar o path das Imagens
 	std::vector<cv::Mat>images;
 	vector<string> imagens_src, imagens_tgt;
 	// Supoe a esfera com resolucao em graus de tal forma - resolucao da imagem final
 	float R = 1; // Raio da esfera [m]
 
-	Vector2f foco;
-
-	Vector2f	center;
-	vector<Eigen::Vector3d>pontos;
+	Vector2f foco, center;// foco e centro otico
+	vector<Eigen::Vector3d>pontos; //ponto (pCenter - p1) para encontrar angulos entre imagens
+	//Find position
 	std::vector<std::vector<int> > pose = Utils::FindPoseRaw();
+
 	if (arquivo_nvm.substr(arquivo_nvm.find_last_of(".") + 1) == "sfm")
 	{
 		for (int i = 0; i < linhas.size(); i++) {
@@ -127,19 +128,20 @@ int main(int argc, char **argv) {
 			foco << stof(splits[13]), stof(splits[14]);
 			//centro otico			
 			center << stof(splits[15]), stof(splits[16]);
+			//pontos
 			pontos.push_back(Utils::pointAngle(pose[i], R, center, image.cols, image.rows, foco));
 		}
 	}
-	//Features Matching - Keypoint and descriptors
+//Features Matching - Keypoint and descriptors
 	vector<vector<cv::KeyPoint>>  kpts_src;
 	vector<cv::Mat>  descp_src;
 	descp_src.resize(imagens_src.size());
 	kpts_src.resize(imagens_src.size());
+	
 
 	//Find Fetaures
 	Utils::calcular_features_surf(descp_src, kpts_src, imagens_src);
-
-
+	
 	//Find neighboring images
 
 	int currentCamera = 0, checkedCamera = 0, nMaxMatch = 0;
@@ -180,12 +182,16 @@ int main(int argc, char **argv) {
 	}
 
 	//Find Matches
+	auto start_time = std::chrono::high_resolution_clock::now();
 
 	// Ajustar matriz de quantidade de matches
 	Eigen::MatrixXi matches_count = Eigen::MatrixXi::Zero(descp_src.size() - 1, descp_src.size() - 1);
 	vector<vector<  vector<cv::DMatch> >> matriz_matches(descp_src.size());
 	for (int i = 0; i < matriz_matches.size(); i++)
 		matriz_matches.at(i).resize(indices_vizinhos[i].size());
+	auto finish_time = std::chrono::high_resolution_clock::now();
+	auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
+	std::cout << "Matches " << time << "\n";
 
 	//Match pair of all images (Keypoints)
 	std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey = Utils::surf_matches_matrix_encontrar_melhor(matriz_matches, descp_src, kpts_src, imagens_src, indices_vizinhos);
@@ -195,7 +201,7 @@ int main(int argc, char **argv) {
 
 	//Size of final panoramic
 	cv::Mat im360 = cv::Mat::zeros(cv::Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas sem blending 
-
+	
 	try
 	{
 		atexit(freeMemory);
@@ -204,7 +210,7 @@ int main(int argc, char **argv) {
 
 		gwo = new GWO(argument->GetBenchmark(), argument->GetPopulationSize(), argument->GetIterations());
 		(void)gwo->Evaluate(argument->IsDebug(), bestKey, imagens_src, im360, indices_vizinhos);
-
+		
 		std::cout << "Result:" << std::endl
 			<< gwo << std::endl;
 
@@ -214,6 +220,7 @@ int main(int argc, char **argv) {
 		std::cerr << "Grey wolf optimizer exception : " << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
+
 
 
 	return EXIT_SUCCESS;

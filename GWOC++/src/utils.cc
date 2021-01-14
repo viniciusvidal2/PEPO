@@ -20,10 +20,25 @@
 #include <algorithm>
 #include <iostream>
 #include <cstring>
-
 #include <time.h> 
-
 #include "utils.hpp"
+
+Utils *utils = nullptr;
+//
+//Utils::Utils() {
+//	raw_min_pan = 35;
+//	raw_max_pan = 4077;
+//	deg_min_pan = 3;
+//	deg_max_pan = 358;
+//	raw_min_tilt = 2595;
+//	raw_hor_tilt = 2280;
+//	raw_max_tilt = 1595;
+//	deg_min_tilt = 28;
+//	deg_hor_tilt = 0;
+//	deg_max_tilt = -60.9;
+//	raw_deg = 11.37777;
+//	deg_raw = 1 / raw_deg;
+//}
 
 // random number between 0 and 1
 double Utils::GenerateRandomNumber() {
@@ -44,17 +59,14 @@ double* Utils::Create1DZeroArray(unsigned int columnCount) {
 
 // create 2d long double array, its value is between (0,1) * (ub-lb)+lb
 double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCount, Boundaries boundaries[]) {
-	//double* ini = [ 1427.099976, 1449.400024, 987.900024, 579.400024, 1427.099976, 1449.400024, 987.900024, 579.400024,34, 2276, 375, 2276 ];
-	//double data[] { 1427.099976, 1449.400024, 987.900024, 579.400024, 1427.099976, 1449.400024, 987.900024, 579.400024, 34, 2276, 375, 2276 };
 
-	//double teste = boundaries[0].lowerBound;
 	double **array = new double *[rowCount];
-
-	for (register unsigned int y = 0; y < rowCount; y++) {
+#pragma omp parallel for
+	for (int y = 0; y < rowCount; y++) {
 		array[y] = new double[columnCount];
 		if (y == 0) {
-			for (register unsigned int x = 0; x < columnCount; x++) {
-				//array[y][x] = data[x];
+			for (int x = 0; x < columnCount; x++) {
+
 				array[y][x] = boundaries[x].lowerBound + 10;
 				array[y][x + 1] = boundaries[x + 1].lowerBound + 10;
 				array[y][x + 2] = boundaries[x + 2].lowerBound + 100;
@@ -66,7 +78,7 @@ double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCo
 		}
 		else {
 			// randomize data and apply between (lower,upper) bound
-			for (register unsigned int x = 0; x < columnCount; x++) {
+			for (int x = 0; x < columnCount; x++) {
 				array[y][x] = boundaries[x].lowerBound + (boundaries[x].upperBound - boundaries[x].lowerBound) * GenerateRandomNumber();
 			}
 		}
@@ -83,7 +95,8 @@ double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCo
 	and values larger than 1 become 1. ... If None, clipping is not performed on lower interval edge.
 */
 void Utils::Clip1DArray(double array[], unsigned int columnCount, Boundaries boundaries[]) {
-	for (register unsigned int column = 0; column < columnCount; column++) {
+#pragma omp parallel for
+	for (int column = 0; column < columnCount; column++) {
 		double value = array[column];
 		if (value < boundaries[column].lowerBound) {
 			array[column] = boundaries[column].lowerBound;
@@ -94,66 +107,72 @@ void Utils::Clip1DArray(double array[], unsigned int columnCount, Boundaries bou
 	}
 }
 int Utils::deg2raw(double deg, std::string motor) {
+	
+	float raw_min_tilt = 2595;
+	float deg_min_tilt = 28;
+	float raw_deg = 11.37777;
 
-	float raw_min_tilt = 2595, raw_hor_tilt = 2280, raw_max_tilt = 1595;
-	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.9;
-	float raw_deg = 11.37777, deg_raw = 1 / raw_deg;
+
 	if (motor == "pan")
 		return int(deg*raw_deg);//int((deg - deg_min_pan )*raw_deg + raw_min_pan);
 	else
 		return int((deg - deg_min_tilt)*raw_deg + raw_min_tilt);
 }
 float Utils::raw2deg(int raw, std::string motor) {
-	float raw_min_tilt = 2595, raw_hor_tilt = 2280, raw_max_tilt = 1595;
-	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.9;
+	
+	
+	float raw_min_tilt = 2595, raw_max_tilt = 1595;
+	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.2;
 	float raw_deg = 11.37777, deg_raw = 1 / raw_deg;
+
 	if (motor == "pan")
 		return float(raw)*deg_raw;//(float(raw) - raw_min_pan )*deg_raw + deg_min_pan;
 	else
 		return (float(raw) - raw_max_tilt)*deg_raw + deg_max_tilt;
 }
+
 std::vector<std::vector<int> > Utils::FindPoseRaw() {
-	float raw_min_pan = 35, raw_max_pan = 4077;
-	float deg_min_pan = 3, deg_max_pan = 358;
-	float raw_min_tilt = 2595, raw_hor_tilt = 2280, raw_max_tilt = 1595;
-	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.9;
-	float raw_deg = 11.37777, deg_raw = 1 / raw_deg;
+
 	// Pontos de observacao em pan
+	
+	float deg_min_pan = 3, deg_max_pan = 358;
+	
+	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.2;
+	
 	int step = 30; // [DEG]
 	//Os limites em pan pode considerar os deg_min e deg_max pra pan
 	float inicio_scanner_deg_pan, final_scanner_deg_pan;
 	inicio_scanner_deg_pan = deg_min_pan;
 	final_scanner_deg_pan = deg_max_pan;
 	int vistas_pan = int(final_scanner_deg_pan - inicio_scanner_deg_pan) / step + 2; // Vistas na horizontal, somar inicio e final do range
-	std::vector<float> pans_deg, tilts_deg; // [DEG]
+	//std::vector<float> pans_deg, tilts_deg; // [DEG]
 	std::vector<float> pans_camera_deg;
-	std::vector<int>   pans_raw, tilts_raw;
-	std::vector<float> tilts_camera_deg{ deg_min_tilt, deg_hor_tilt, -30.0f, deg_max_tilt };
+	//std::vector<int>   pans_raw, tilts_raw;
+	std::vector<float> tilts_camera_deg{ deg_min_tilt,deg_hor_tilt, -30.0f, deg_max_tilt };
 
 	for (int j = 0; j < vistas_pan - 1; j++)
 		pans_camera_deg.push_back(inicio_scanner_deg_pan + float(j*step));
 
-	cv::Mat poseRaw(pans_camera_deg.size(), 3, CV_32F);
 	// Enchendo vetores de waypoints de imagem em deg e raw globais
 	std::vector<std::vector<int> > pose;
 	for (int j = 0; j < pans_camera_deg.size(); j++) {
 		for (int i = 0; i < tilts_camera_deg.size(); i++) {
 			int tilt;
 			if (remainder(j, 2) == 0) {
-				tilts_deg.push_back(tilts_camera_deg[i]);
-				tilts_raw.push_back(Utils::deg2raw(tilts_camera_deg[i], "tilt"));
+				/*tilts_deg.push_back(tilts_camera_deg[i]);
+				tilts_raw.push_back(Utils::deg2raw(tilts_camera_deg[i], "tilt"));*/
 				tilt = Utils::deg2raw(tilts_camera_deg[i], "tilt");
 			}
 			else {
-				tilts_deg.push_back(tilts_camera_deg[tilts_camera_deg.size() - 1 - i]);
-				tilts_raw.push_back(Utils::deg2raw(tilts_camera_deg[tilts_camera_deg.size() - 1 - i], "tilt"));
+				/*tilts_deg.push_back(tilts_camera_deg[tilts_camera_deg.size() - 1 - i]);
+				tilts_raw.push_back(Utils::deg2raw(tilts_camera_deg[tilts_camera_deg.size() - 1 - i], "tilt"));*/
 				tilt = Utils::deg2raw(tilts_camera_deg[tilts_camera_deg.size() - 1 - i], "tilt");
 			}
-			pans_deg.push_back(pans_camera_deg[j]);
-			pans_raw.push_back(Utils::deg2raw(pans_camera_deg[j], "pan"));
+			/*pans_deg.push_back(pans_camera_deg[j]);
+			pans_raw.push_back(Utils::deg2raw(pans_camera_deg[j], "pan"));*/
 
-			std::vector<int> pos{ 0, tilt, Utils::deg2raw(pans_camera_deg[j], "pan") };
-			pose.push_back(pos);
+			//std::vector<int> pos{ 0, tilt, Utils::deg2raw(pans_camera_deg[j], "pan") };
+			pose.push_back({ 0, tilt, Utils::deg2raw(pans_camera_deg[j], "pan") });
 		}
 	}
 	return pose;//roll,tilt,pan
@@ -185,14 +204,14 @@ Eigen::Vector3d Utils::pointAngle(std::vector<int> pose, double R, Eigen::Vector
 	Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;
 	p << 0, 0, 0;
 	p1 = r1 * p;
-	p << minX, minY, F;
+	/*p << minX, minY, F;
 	p2 = r1 * p;
 	p << maxX, minY, F;
 	p3 = r1 * p;
 	p << maxX, maxY, F;
 	p4 = r1 * p;
 	p << minX, maxY, F;
-	p5 = r1 * p;
+	p5 = r1 * p;*/
 	p << 0, 0, F;
 	pCenter = r1 * p;
 
@@ -203,7 +222,7 @@ Eigen::Vector3d Utils::pointAngle(std::vector<int> pose, double R, Eigen::Vector
 void Utils::calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector<std::vector<cv::KeyPoint> >  &kpts_src, std::vector<std::string> imagens_src)
 {
 
-#pragma omp parallel for
+	//#pragma omp parallel for
 	for (int i = 0; i < descp_src.size(); i++) {
 		// Iniciando Keypoints e Descritores atuais
 		std::vector<cv::KeyPoint> kpsrc;
@@ -220,6 +239,8 @@ void Utils::calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector
 		cv::Mat dsrcsum;
 
 		reduce(dsrc, dsrcsum, 1, CV_16UC1);
+
+		////RootSIFT
 		// Normalizando e passando raiz em cada elementos de linha nos descritores da src
 #pragma omp parallel for
 		for (int i = 0; i < dsrc.rows; i++) {
@@ -227,6 +248,7 @@ void Utils::calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector
 				dsrc.at<float>(i, j) = sqrt(dsrc.at<float>(i, j) / (dsrcsum.at<float>(i, 0) + std::numeric_limits<float>::epsilon()));
 			}
 		}
+
 		//Salvando no vetor de keypoints
 		kpts_src[i] = kpsrc;
 		// Salvando no vetor de cada um os descritores
@@ -310,7 +332,7 @@ void Utils::filtrar_matches_keypoints_repetidos(std::vector<cv::KeyPoint> &kt, s
 			matriz_matches[i][j].clear(); // Ja podemos limpar aquele vetor, ja trabalhamos
 		}
 	}
-	
+
 	// Retornando as matches que restaram
 	m = otimas_matches;
 }
@@ -323,10 +345,8 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 
 	// Para cada combinacao de imagens, fazer match e salvar quantidade final para ver qual
 	// a melhor depois
-	auto start_time = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for
 	for (int frame0 = 0; frame0 < descp_src.size(); frame0++) {
-		auto start_time = std::chrono::high_resolution_clock::now();
 		for (int frame1 = 0; frame1 < indices[frame0].size(); frame1++)
 		{
 
@@ -334,12 +354,10 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 			std::vector<cv::DMatch> good_matches;
 			if (!descp_src[frame0].empty() && !descp_src[indices[frame0][frame1]].empty()) {
 				matcher->knnMatch(descp_src[frame0], descp_src[indices[frame0][frame1]], matches, 2);
-			/*	auto finish_time = std::chrono::high_resolution_clock::now();
-				auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
-				std::cout << "matches " << time << "\n";*/
-				for (size_t k = 0; k < matches.size(); k++) 
+
+				for (size_t k = 0; k < matches.size(); k++)
 				{
-					if (matches.at(k).size() >= 2) 
+					if (matches.at(k).size() >= 2)
 					{
 						if (matches.at(k).at(0).distance < 0.7*matches.at(k).at(1).distance) // Se e bastante unica frente a segunda colocada
 							good_matches.push_back(matches.at(k).at(0));
@@ -359,10 +377,10 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				}
 
 			}
-			
+
 		}
 	}
-	
+
 
 	bool debug = false;
 	std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey;
@@ -370,8 +388,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 	std::vector<cv::KeyPoint> best_kptgt, best_kpsrc;
 	bestKey.resize(descp_src.size());
 
-	indices.resize(descp_src.size());
-	auto start_time1 = std::chrono::high_resolution_clock::now();
+
 	for (int frame0 = 0; frame0 < descp_src.size(); frame0++)
 	{
 		for (int frame1 = 0; frame1 < indices[frame0].size(); frame1++)
@@ -383,7 +400,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				best_kptgt.emplace_back(curr_kpts_tgt[m.trainIdx]);
 				best_kpsrc.emplace_back(curr_kpts_src[m.queryIdx]);
 			}
-			
+
 			// Converter os pontos para o formato certo
 			std::vector<cv::Point2d> kptgt(best_kptgt.size()), kpsrc(best_kpsrc.size());
 #pragma omp parallel for
@@ -391,7 +408,8 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				kptgt[i] = best_kptgt[i].pt;
 				kpsrc[i] = best_kpsrc[i].pt;
 			}
-			if (best_matches.size() > 15) {
+			if (best_matches.size() > 15)
+			{
 				// Calcular matriz fundamental
 				cv::Mat F = findFundamentalMat(kpsrc, kptgt); // Transformacao da src para a tgt
 				// Calcular pontos que ficam por conferencia da matriz F
@@ -431,7 +449,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				imwrite("C:/dataset3/im_src1.png", im2);
 
 			}
-			//indices[frame0].push_back(frame1);
+
 			bestKey[frame0].push_back(best_kpsrc);
 			bestKey[frame0].push_back(best_kptgt);
 			best_kptgt.clear();
@@ -440,9 +458,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 
 		}
 	}
-	auto finish_time1 = std::chrono::high_resolution_clock::now();
-	auto time1= std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time1 - start_time1).count() * 1e-9;
-	std::cout << "matches " << time1 << "\n";
+
 	return bestKey;
 }
 

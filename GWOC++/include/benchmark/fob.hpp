@@ -51,11 +51,12 @@
 #include <Eigen/Core>
 class fob : public Benchmark {
     private:
-        const unsigned int variablesCount_m = 12;//dimension
+        const unsigned int variablesCount_m = 288 ;//dimension
         Boundaries *boundaries_m;
+
     public:
 		fob();
         ~fob();
-        double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360,cv::Mat image1, cv::Mat image2, std::vector<std::vector<int>> indices);
+        double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360,int rows, int cols, std::vector<std::vector<int>> indices);
         static Benchmark *Create();
 };

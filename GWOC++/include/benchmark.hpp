@@ -71,6 +71,6 @@
             void setName(const std::string &name);
             void setDimension(const unsigned int &dimension);
             void setBoundaries(Boundaries *boundaries);
-            virtual double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, cv::Mat image1, cv::Mat image2, std::vector<std::vector<int>> indices) = 0;
+            virtual double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices) = 0;
     };
 #endif

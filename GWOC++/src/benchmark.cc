@@ -21,31 +21,30 @@
 #include <string>
 #include "benchmark.hpp"
 
-Benchmark::Benchmark(const std::string &name,
-                     const unsigned int &dimension,
-                     Boundaries *boundaries) : name_m(name), dimension_m(dimension), boundaries_m(boundaries) {
+Benchmark::Benchmark(const std::string &name, const unsigned int &dimension, Boundaries *boundaries) 
+	: name_m(name), dimension_m(dimension), boundaries_m(boundaries) {
 }
 
 void Benchmark::setName(const std::string &name) {
-    name_m = name;
+	name_m = name;
 }
 
 void Benchmark::setDimension(const unsigned int &dimension) {
-    dimension_m = dimension;
+	dimension_m = dimension;
 }
 
 void Benchmark::setBoundaries(Boundaries *boundaries) {
-    boundaries_m = boundaries;
+	boundaries_m = boundaries;
 }
 
 std::string Benchmark::GetName() {
-    return this->name_m;
+	return this->name_m;
 }
 
 unsigned int Benchmark::GetDimension() {
-    return this->dimension_m;
+	return this->dimension_m;
 }
 
 Boundaries* Benchmark::getBoundaries() {
-    return this->boundaries_m;
+	return this->boundaries_m;
 }

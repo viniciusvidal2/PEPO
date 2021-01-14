@@ -55,7 +55,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 GWO::GWO(Benchmark *benchmark, unsigned int searchAgentsCount,
-	unsigned int maximumIterations) {
+	unsigned int maximumIterations) 
+{
 	benchmark_m = benchmark;
 	searchAgentsCount_m = searchAgentsCount;
 	maximumIterations_m = maximumIterations;
@@ -86,15 +87,15 @@ GWO::~GWO() {
 	delete convergenceCurve_m;
 }
 
-void GWO::calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, cv::Mat image1, cv::Mat image2, std::vector<std::vector<int>> indices) {
+void GWO::calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices) {
 	double fitness;
 	//auto start_time = std::chrono::high_resolution_clock::now();
-//#pragma omp parallel for
+#pragma omp parallel for
 	for (register int agentIndex = 0; agentIndex < searchAgentsCount_m; agentIndex++) {
 		Utils::Clip1DArray(positions_m[agentIndex], dimension_m, boundaries_m);
 
 		//Calculate objective function for each search agent
-		fitness = benchmark_m->fitness(positions_m[agentIndex], bestKey, imagens_src, im360, image1, image2, indices);
+		fitness = benchmark_m->fitness(positions_m[agentIndex], bestKey, imagens_src, im360, rows, cols, indices);
 
 		//Update Alpha, Beta, and Delta
 		if (fitness < alphaScore_m) {
@@ -161,12 +162,12 @@ void GWO::updateWolves(double a) {
 double* GWO::Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, std::vector<std::vector<int>> indices) {
 	double a;
 	cv::Mat image1 = cv::imread(imagens_src[0]);
-	cv::Mat image2 = cv::imread(imagens_src[1]);
+
 	auto start_time = std::chrono::high_resolution_clock::now();
-	//#pragma omp parallel for
+#pragma omp parallel for
 	for (register int iteration = 0; iteration < maximumIterations_m; iteration++) {
-		auto start_time = std::chrono::high_resolution_clock::now();
-		calculateFitness(bestKey, imagens_src, im360, image1, image2, indices);
+
+		calculateFitness(bestKey, imagens_src, im360, image1.rows, image1.cols, indices);
 
 		//a decreases linearly from 2 to 0
 		a = 2.0 - iteration * (2.0 / maximumIterations_m);
@@ -179,8 +180,7 @@ double* GWO::Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoi
 				<< std::setprecision(10)
 				<< alphaScore_m << std::endl;
 		}
-		/*	auto finish_time = std::chrono::high_resolution_clock::now();
-			executionTime_m = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;*/
+
 	}
 
 	auto finish_time = std::chrono::high_resolution_clock::now();
@@ -247,14 +247,10 @@ std::ostream& operator << (std::ostream& os, const GWO *gwo) {
 		else
 			nome_imagem_atual = "imagem_" + std::to_string(indice_posicao + 1);
 		teste = variable + 6;
-		cam << "C:/dataset3/" + nome_imagem_atual + ".png" << " "<<"0" << " " ;
+		cam << "C:/dataset3/" + nome_imagem_atual + ".png" << " " << "0" << " ";
 		for (variable; variable < teste; variable++)
 		{
-			//	os << gwo->alphaPosition_m[variable] << " ";
-
-							/*	Matrix3f R360 = euler2matrix(current_roll, -DEG2RAD(raw2deg(tilts_raw[indice_posicao], "tilt")), -DEG2RAD(raw2deg(pans_raw[indice_posicao], "pan")));
-					cout << pasta + nome_imagem_atual + ".png";*/
-			cam <<  gwo->alphaPosition_m[variable] << " ";
+			cam << gwo->alphaPosition_m[variable] << " ";
 		}
 		cam << "\n";
 	}
