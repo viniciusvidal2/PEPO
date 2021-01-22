@@ -61,6 +61,7 @@
             std::string name_m;
             unsigned int dimension_m;
             Boundaries *boundaries_m = nullptr;
+
         public:
             Benchmark(const std::string &name, const unsigned int &dimension, Boundaries *boundaries);
             Benchmark() = default;

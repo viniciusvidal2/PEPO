@@ -24,21 +24,7 @@
 #include "utils.hpp"
 
 Utils *utils = nullptr;
-//
-//Utils::Utils() {
-//	raw_min_pan = 35;
-//	raw_max_pan = 4077;
-//	deg_min_pan = 3;
-//	deg_max_pan = 358;
-//	raw_min_tilt = 2595;
-//	raw_hor_tilt = 2280;
-//	raw_max_tilt = 1595;
-//	deg_min_tilt = 28;
-//	deg_hor_tilt = 0;
-//	deg_max_tilt = -60.9;
-//	raw_deg = 11.37777;
-//	deg_raw = 1 / raw_deg;
-//}
+
 
 // random number between 0 and 1
 double Utils::GenerateRandomNumber() {
@@ -62,7 +48,8 @@ double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCo
 
 	double **array = new double *[rowCount];
 #pragma omp parallel for
-	for (int y = 0; y < rowCount; y++) {
+	for (int y = 0; y < rowCount; y++) 
+	{
 		array[y] = new double[columnCount];
 		if (y == 0) {
 			for (int x = 0; x < columnCount; x++) {
@@ -84,7 +71,12 @@ double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCo
 		}
 	}
 
-
+	/*for (int y = 0; y < rowCount; y++)
+	{
+		for (int x = 0; x < columnCount; x++) {
+			std::cout << array[y][x] << std::endl;
+		}
+	}*/
 	return array;
 }
 
@@ -95,7 +87,7 @@ double** Utils::Create2DRandomArray(unsigned int rowCount, unsigned int columnCo
 	and values larger than 1 become 1. ... If None, clipping is not performed on lower interval edge.
 */
 void Utils::Clip1DArray(double array[], unsigned int columnCount, Boundaries boundaries[]) {
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (int column = 0; column < columnCount; column++) {
 		double value = array[column];
 		if (value < boundaries[column].lowerBound) {
@@ -107,7 +99,7 @@ void Utils::Clip1DArray(double array[], unsigned int columnCount, Boundaries bou
 	}
 }
 int Utils::deg2raw(double deg, std::string motor) {
-	
+
 	float raw_min_tilt = 2595;
 	float deg_min_tilt = 28;
 	float raw_deg = 11.37777;
@@ -119,8 +111,8 @@ int Utils::deg2raw(double deg, std::string motor) {
 		return int((deg - deg_min_tilt)*raw_deg + raw_min_tilt);
 }
 float Utils::raw2deg(int raw, std::string motor) {
-	
-	
+
+
 	float raw_min_tilt = 2595, raw_max_tilt = 1595;
 	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.2;
 	float raw_deg = 11.37777, deg_raw = 1 / raw_deg;
@@ -134,11 +126,11 @@ float Utils::raw2deg(int raw, std::string motor) {
 std::vector<std::vector<int> > Utils::FindPoseRaw() {
 
 	// Pontos de observacao em pan
-	
+
 	float deg_min_pan = 3, deg_max_pan = 358;
-	
-	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.2;
-	
+
+	float deg_min_tilt = 28, deg_hor_tilt = 0, deg_max_tilt = -60.9;
+
 	int step = 30; // [DEG]
 	//Os limites em pan pode considerar os deg_min e deg_max pra pan
 	float inicio_scanner_deg_pan, final_scanner_deg_pan;
@@ -199,7 +191,8 @@ Eigen::Vector3d Utils::pointAngle(std::vector<int> pose, double R, Eigen::Vector
 	//		*/
 
 	Eigen::Matrix3d r1;
-	r1 = Eigen::AngleAxisd(-DEG2RAD(Utils::raw2deg(pose[1], "pan")), Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(pose[0], Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(-DEG2RAD(Utils::raw2deg(pose[2], "tilt")), Eigen::Vector3d::UnitX());
+	//pose - roll,tilt,pan
+	r1 = Eigen::AngleAxisd(-DEG2RAD(Utils::raw2deg(pose[2], "pan")), Eigen::Vector3d::UnitY()) * Eigen::AngleAxisd(pose[0], Eigen::Vector3d::UnitZ()) * Eigen::AngleAxisd(-DEG2RAD(Utils::raw2deg(pose[1], "tilt")), Eigen::Vector3d::UnitX());
 
 	Eigen::Vector3d p, p1, p2, p3, p4, p5, pCenter;
 	p << 0, 0, 0;
@@ -222,14 +215,16 @@ Eigen::Vector3d Utils::pointAngle(std::vector<int> pose, double R, Eigen::Vector
 void Utils::calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector<std::vector<cv::KeyPoint> >  &kpts_src, std::vector<std::string> imagens_src)
 {
 
-	//#pragma omp parallel for
+#pragma omp parallel for
 	for (int i = 0; i < descp_src.size(); i++) {
 		// Iniciando Keypoints e Descritores atuais
 		std::vector<cv::KeyPoint> kpsrc;
 		cv::Mat  dsrc;
 
 		// Ler a imagem inicial
-		cv::Mat imsrc = cv::imread(imagens_src[i], cv::IMREAD_GRAYSCALE);
+		cv::Mat imsrc = cv::imread(imagens_src[i], cv::IMREAD_COLOR);
+		//cv::Mat imsrc;
+		//cv::resize(out, imsrc, cv::Size(out.cols * 0.5, out.rows * 0.5), 0, 0, CV_INTER_LINEAR);
 
 		// Descritores SIFT calculados
 		cv::Ptr<cv::xfeatures2d::SIFT> sift = cv::xfeatures2d::SIFT::create();
@@ -248,13 +243,31 @@ void Utils::calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector
 				dsrc.at<float>(i, j) = sqrt(dsrc.at<float>(i, j) / (dsrcsum.at<float>(i, 0) + std::numeric_limits<float>::epsilon()));
 			}
 		}
-
-		//Salvando no vetor de keypoints
+		//double x1 = (kpsrc[i].pt.x*(out.cols));
+		//double y1 = (kpsrc[i].pt.y*(out.rows));
+		////Salvando no vetor de keypoints
+		//kpsrc[i].pt.x = x1 / (out.cols / 2);
+		//kpsrc[i].pt.y = y1 / (out.rows / 2);
 		kpts_src[i] = kpsrc;
 		// Salvando no vetor de cada um os descritores
 		descp_src[i] = dsrc;
-	}
 
+		//	for (int i = 0; i < kpsrc.size(); i++) {
+		//		int r = rand() % 255, b = rand() % 255, g = rand() % 255;
+		//		circle(imsrc, cv::Point(kpsrc[i].pt.x, kpsrc[i].pt.y), 8, cv::Scalar(r, g, b), cv::FILLED, cv::LINE_8);
+		//		//circle(im2, cv::Point(kpsrc[i].pt.x, kpsrc[i].pt.y), 8, cv::Scalar(r, g, b), cv::FILLED, cv::LINE_8);
+		//	//}
+
+		//		
+
+		//		
+		//		circle(out, cv::Point(x1 / (out.cols / 2), y1 / (out.rows / 2)), 8, cv::Scalar(r, g, b), cv::FILLED, cv::LINE_8);
+		//		
+		//	}
+		//	cv::imwrite("C:/dataset3/im_tgt1.png", imsrc);
+		//	cv::imwrite("C:/dataset3/im_tgt2.png", out);
+		//}
+	}
 }
 
 
@@ -338,7 +351,7 @@ void Utils::filtrar_matches_keypoints_repetidos(std::vector<cv::KeyPoint> &kt, s
 }
 
 
-std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_encontrar_melhor(std::vector<std::vector<  std::vector<cv::DMatch> >> matriz_matches, std::vector<cv::Mat>  descp_src, std::vector< std::vector<cv::KeyPoint> >  kpts_src, std::vector<std::string> imagens_src, std::vector<std::vector<int>> &indices) {
+std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_encontrar_melhor(std::vector<std::vector<  std::vector<cv::DMatch> >> matriz_matches, std::vector<cv::Mat>  descp_src, std::vector< std::vector<cv::KeyPoint> >  kpts_src, std::vector<std::string> imagens_src, std::vector<std::vector<int>> &indices, std::vector<int> ind_val) {
 	// Matcher de FLANN
 	cv::Ptr<cv::DescriptorMatcher> matcher;
 	matcher = cv::DescriptorMatcher::create(cv::DescriptorMatcher::FLANNBASED);
@@ -346,14 +359,16 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 	// Para cada combinacao de imagens, fazer match e salvar quantidade final para ver qual
 	// a melhor depois
 #pragma omp parallel for
-	for (int frame0 = 0; frame0 < descp_src.size(); frame0++) {
+	for (int frame0 = 0; frame0 < ind_val.size(); frame0++) {
+
 		for (int frame1 = 0; frame1 < indices[frame0].size(); frame1++)
 		{
 
+
 			std::vector<std::vector<cv::DMatch>> matches;
 			std::vector<cv::DMatch> good_matches;
-			if (!descp_src[frame0].empty() && !descp_src[indices[frame0][frame1]].empty()) {
-				matcher->knnMatch(descp_src[frame0], descp_src[indices[frame0][frame1]], matches, 2);
+			if (!descp_src[ind_val[frame0]].empty() && !descp_src[indices[frame0][frame1]].empty()) {
+				matcher->knnMatch(descp_src[ind_val[frame0]], descp_src[indices[frame0][frame1]], matches, 2);
 
 				for (size_t k = 0; k < matches.size(); k++)
 				{
@@ -366,7 +381,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				if (good_matches.size() > 0)
 				{
 					// Filtrar keypoints repetidos
-					Utils::filtrar_matches_keypoints_repetidos(kpts_src[indices[frame0][frame1]], kpts_src[frame0], good_matches);
+					Utils::filtrar_matches_keypoints_repetidos(kpts_src[indices[frame0][frame1]], kpts_src[ind_val[frame0]], good_matches);
 					// Filtrar por matches que nao sejam muito horizontais
 					//filterMatchesLineCoeff(good_matches, kpts_tgt[i], kpts_src[j], imcols, DEG2RAD(50));
 
@@ -378,7 +393,9 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 
 			}
 
+
 		}
+
 	}
 
 
@@ -386,14 +403,16 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 	std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey;
 	std::vector<cv::DMatch> best_matches;
 	std::vector<cv::KeyPoint> best_kptgt, best_kpsrc;
-	bestKey.resize(descp_src.size());
+	bestKey.resize(ind_val.size());
 
 
-	for (int frame0 = 0; frame0 < descp_src.size(); frame0++)
+	for (int frame0 = 0; frame0 < ind_val.size(); frame0++)
 	{
+
 		for (int frame1 = 0; frame1 < indices[frame0].size(); frame1++)
 		{
-			std::vector<cv::KeyPoint> curr_kpts_tgt = kpts_src[indices[frame0][frame1]], curr_kpts_src = kpts_src[frame0];
+
+			std::vector<cv::KeyPoint> curr_kpts_tgt = kpts_src[indices[frame0][frame1]], curr_kpts_src = kpts_src[ind_val[frame0]];
 			best_matches = matriz_matches.at(frame0).at(frame1);
 
 			for (auto m : best_matches) {
@@ -408,7 +427,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 				kptgt[i] = best_kptgt[i].pt;
 				kpsrc[i] = best_kpsrc[i].pt;
 			}
-			if (best_matches.size() > 15)
+			if (best_matches.size() > 20)
 			{
 				// Calcular matriz fundamental
 				cv::Mat F = findFundamentalMat(kpsrc, kptgt); // Transformacao da src para a tgt
@@ -439,7 +458,7 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 			}
 			if (debug) {
 				cv::Mat im1 = cv::imread(imagens_src[indices[frame0][frame1]], cv::IMREAD_COLOR);
-				cv::Mat im2 = cv::imread(imagens_src[frame0], cv::IMREAD_COLOR);
+				cv::Mat im2 = cv::imread(imagens_src[ind_val[frame0]], cv::IMREAD_COLOR);
 				for (int i = 0; i < best_kpsrc.size(); i++) {
 					int r = rand() % 255, b = rand() % 255, g = rand() % 255;
 					circle(im1, cv::Point(best_kptgt[i].pt.x, best_kptgt[i].pt.y), 8, cv::Scalar(r, g, b), cv::FILLED, cv::LINE_8);
@@ -454,9 +473,9 @@ std::vector<std::vector<std::vector<cv::KeyPoint>>> Utils::surf_matches_matrix_e
 			bestKey[frame0].push_back(best_kptgt);
 			best_kptgt.clear();
 			best_kpsrc.clear();
-
-
 		}
+
+
 	}
 
 	return bestKey;

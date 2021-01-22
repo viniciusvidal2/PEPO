@@ -55,11 +55,14 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 GWO::GWO(Benchmark *benchmark, unsigned int searchAgentsCount,
-	unsigned int maximumIterations) 
+	unsigned int maximumIterations, std::vector<int>ind_vazios, std::vector<int>ind_val)
 {
 	benchmark_m = benchmark;
 	searchAgentsCount_m = searchAgentsCount;
 	maximumIterations_m = maximumIterations;
+	ind_vazios_m = ind_vazios;
+	ind_val_m = ind_val;
+
 	boundaries_m = benchmark_m->getBoundaries();
 	dimension_m = benchmark_m->GetDimension();
 	convergenceCurve_m = Utils::Create1DZeroArray(maximumIterations_m);
@@ -74,6 +77,7 @@ GWO::GWO(Benchmark *benchmark, unsigned int searchAgentsCount,
 
 	//Initialize the positions of search agents
 	positions_m = Utils::Create2DRandomArray(searchAgentsCount_m, dimension_m, boundaries_m);
+	
 }
 
 GWO::~GWO() {
@@ -90,11 +94,12 @@ GWO::~GWO() {
 void GWO::calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices) {
 	double fitness;
 	//auto start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (register int agentIndex = 0; agentIndex < searchAgentsCount_m; agentIndex++) {
 		Utils::Clip1DArray(positions_m[agentIndex], dimension_m, boundaries_m);
 
 		//Calculate objective function for each search agent
+		//std::cout << positions_m[agentIndex][0]<<std::endl;
 		fitness = benchmark_m->fitness(positions_m[agentIndex], bestKey, imagens_src, im360, rows, cols, indices);
 
 		//Update Alpha, Beta, and Delta
@@ -164,7 +169,7 @@ double* GWO::Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoi
 	cv::Mat image1 = cv::imread(imagens_src[0]);
 
 	auto start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (register int iteration = 0; iteration < maximumIterations_m; iteration++) {
 
 		calculateFitness(bestKey, imagens_src, im360, image1.rows, image1.cols, indices);
@@ -177,7 +182,7 @@ double* GWO::Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoi
 
 		if (debug && (iteration % 1 == 0)) {
 			std::cout << "At iteration " << iteration << " the best fitness is "
-				<< std::setprecision(10)
+				<< std::setprecision(3)
 				<< alphaScore_m << std::endl;
 		}
 
@@ -222,7 +227,7 @@ std::ostream& operator << (std::ostream& os, const GWO *gwo) {
 		<< std::setprecision(9)
 		<< "Benchmark: " << gwo->benchmark_m->GetName() << std::endl
 		<< "Alpha position = ";
-
+	
 	for (register unsigned int variable = 0; variable < gwo->dimension_m; variable++) {
 		os << gwo->alphaPosition_m[variable] << " ";
 	}
@@ -237,15 +242,17 @@ std::ostream& operator << (std::ostream& os, const GWO *gwo) {
 	std::ofstream cam{ "C:/dataset3/cameras_otimizado.sfm" };
 	int teste = 0;
 	int variable = 0;
+	std::vector<int> vazios = gwo->ind_vazios_m;
+	std::vector<int> validos = gwo->ind_val_m;
 	for (int indice_posicao = 0; indice_posicao < gwo->dimension_m / 6; indice_posicao++)
 	{
 		std::string nome_imagem_atual;
-		if (indice_posicao + 1 < 10)
-			nome_imagem_atual = "imagem_00" + std::to_string(indice_posicao + 1);
-		else if (indice_posicao + 1 < 100)
-			nome_imagem_atual = "imagem_0" + std::to_string(indice_posicao + 1);
+		if (validos[indice_posicao] + 1 < 10)
+			nome_imagem_atual = "imagem_00" + std::to_string(validos[indice_posicao] + 1);
+		else if (validos[indice_posicao] + 1 < 100)
+			nome_imagem_atual = "imagem_0" + std::to_string(validos[indice_posicao] + 1);
 		else
-			nome_imagem_atual = "imagem_" + std::to_string(indice_posicao + 1);
+			nome_imagem_atual = "imagem_" + std::to_string(validos[indice_posicao] + 1);
 		teste = variable + 6;
 		cam << "C:/dataset3/" + nome_imagem_atual + ".png" << " " << "0" << " ";
 		for (variable; variable < teste; variable++)
@@ -253,6 +260,19 @@ std::ostream& operator << (std::ostream& os, const GWO *gwo) {
 			cam << gwo->alphaPosition_m[variable] << " ";
 		}
 		cam << "\n";
+	}
+	std::vector<std::vector<int> > pose = Utils::FindPoseRaw();
+	double cx, cy, fx, fy;
+	fx = 1427.099976; fy = 1449.400024; cx = 960; cy = 540;
+	for (int ind = 0; ind < vazios.size();ind++) {
+		std::string nome_imagem_atual;
+		if (vazios[ind] + 1 < 10)
+			nome_imagem_atual = "imagem_00" + std::to_string(vazios[ind] + 1);
+		else if (vazios[ind] + 1 < 100)
+			nome_imagem_atual = "imagem_0" + std::to_string(vazios[ind] + 1);
+		else
+			nome_imagem_atual = "imagem_" + std::to_string(vazios[ind] + 1);
+		cam << "C:/dataset3/" + nome_imagem_atual + ".png" << " " << "0" << " "<<pose[vazios[ind]][2]<< " " <<pose[vazios[ind]][1] << " " <<fx << " " <<fy << " " <<cx << " " <<cy << "\n";
 	}
 
 	cam.close();

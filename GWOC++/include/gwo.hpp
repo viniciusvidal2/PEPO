@@ -19,46 +19,48 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef __GWO_H
-    #define __GWO_H
-    #include "utils.hpp"
-    #include "benchmark.hpp"
+#define __GWO_H
+#include "utils.hpp"
+#include "benchmark.hpp"
+#include <cstdlib> //atexit
+#include <iostream> //cerr, cout
+class GWO {
 
-    class GWO {
-        private:
-            double executionTime_m = 0;
-            Benchmark *benchmark_m;
-            unsigned int searchAgentsCount_m;
-            unsigned int maximumIterations_m;
-            Boundaries *boundaries_m;
-            unsigned int dimension_m;
+private:
+	double executionTime_m = 0;
+	Benchmark *benchmark_m;
+	unsigned int searchAgentsCount_m;
+	unsigned int maximumIterations_m;
+	Boundaries *boundaries_m;
+	unsigned int dimension_m;
+	std::vector<int>ind_vazios_m;
+	std::vector<int>ind_val_m;
+	//initialize alpha, beta, and delta_pos
+	double *alphaPosition_m;
+	double alphaScore_m;
+	double *betaPosition_m;
+	double betaScore_m;
+	double *deltaPosition_m;
+	double deltaScore_m;
 
-            //initialize alpha, beta, and delta_pos
-            double *alphaPosition_m;
-            double alphaScore_m;
-            double *betaPosition_m;
-            double betaScore_m;
-            double *deltaPosition_m;
-            double deltaScore_m;
+	//Initialize the positions of search agents
+	double **positions_m;
+	double *convergenceCurve_m;
 
-            //Initialize the positions of search agents
-            double **positions_m;
-            double *convergenceCurve_m;
-	
-            void calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices);
-            void updateWolves(double a);
+	void calculateFitness(std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices);
+	void updateWolves(double a);
 
-        public:
-            GWO(Benchmark *benchmark, unsigned int searchAgentsCount, 
-                unsigned int maximumIterations);
-            ~GWO();
-            double *Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, std::vector<std::vector<int>> indices);
-            double *GetAlphaPosition();
-            double GetAlphaScore();
-            double *GetBetaPosition();
-            double GetBetaScore();
-            double *GetDeltaPosition();
-            double GetDeltaScore();
-            double GetExecutionTime();
-            friend std::ostream& operator << (std::ostream& os, const GWO *gwo);
-    };
+public:
+	GWO(Benchmark *benchmark, unsigned int searchAgentsCount,unsigned int maximumIterations, std::vector<int>ind_vazios, std::vector<int>ind_val_m);
+	~GWO();
+	double *Evaluate(bool debug, std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, std::vector<std::vector<int>> indices);
+	double *GetAlphaPosition();
+	double GetAlphaScore();
+	double *GetBetaPosition();
+	double GetBetaScore();
+	double *GetDeltaPosition();
+	double GetDeltaScore();
+	double GetExecutionTime();
+	friend std::ostream& operator << (std::ostream& os, const GWO *gwo);
+};
 #endif

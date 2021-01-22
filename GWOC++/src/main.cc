@@ -56,7 +56,7 @@ void freeMemory() {
 }
 
 int main(int argc, char **argv) {
-	char* arguments[] = { "--dir", "-name","fob","-population_size","30","-iterations","1000","-debug","true" };
+	char* arguments[] = { "--dir", "-name","fob","-population_size","35","-iterations","100","-debug","true" };
 
 	argv = arguments;
 	argc = sizeof(arguments) / sizeof(arguments[0]) - 1;
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 
 	char* home;
 	home = getenv("HOME");
-	std::string pasta = "C:/Users/julia/Pictures/gerador_tomada2/";
+	std::string pasta = "C:/dataset3/dados/";
 	std::string arquivo_nvm = pasta + "cameras.sfm";
 	ifstream nvm(arquivo_nvm);
 	int contador_linhas = 1;
@@ -76,14 +76,16 @@ int main(int argc, char **argv) {
 	{
 		flag = 1;
 		if (nvm.is_open()) {
-			while (getline(nvm, linha)) {
+			while (getline(nvm, linha))
+			{
 				if (contador_linhas > 2 && linha.size() > 4)
 					linhas.push_back(linha);
 
 				contador_linhas++;
 			}
 		}
-		else {
+		else
+		{
 			printf("Arquivo de cameras nao encontrado. Desligando ...\n");
 			return 0;
 		}
@@ -103,7 +105,7 @@ int main(int argc, char **argv) {
 			return 0;
 		}
 	}
-	
+
 	//Salvar o path das Imagens
 	std::vector<cv::Mat>images;
 	vector<string> imagens_src, imagens_tgt;
@@ -113,7 +115,7 @@ int main(int argc, char **argv) {
 	Vector2f foco, center;// foco e centro otico
 	vector<Eigen::Vector3d>pontos; //ponto (pCenter - p1) para encontrar angulos entre imagens
 	//Find position
-	std::vector<std::vector<int> > pose = Utils::FindPoseRaw();
+	std::vector<std::vector<int> > pose = Utils::FindPoseRaw();//roll,tilt,pan
 
 	if (arquivo_nvm.substr(arquivo_nvm.find_last_of(".") + 1) == "sfm")
 	{
@@ -132,85 +134,106 @@ int main(int argc, char **argv) {
 			pontos.push_back(Utils::pointAngle(pose[i], R, center, image.cols, image.rows, foco));
 		}
 	}
-//Features Matching - Keypoint and descriptors
+
+	// Features Matching - Keypoint and descriptors
 	vector<vector<cv::KeyPoint>>  kpts_src;
 	vector<cv::Mat>  descp_src;
 	descp_src.resize(imagens_src.size());
 	kpts_src.resize(imagens_src.size());
-	
 
 	//Find Fetaures
 	Utils::calcular_features_surf(descp_src, kpts_src, imagens_src);
-	
+	vector<int> ind_vazios, ind_val;
+	for (int a = 0; a < kpts_src.size(); a++)
+	{
+		if (kpts_src[a].size() < 20)
+		{
+			ind_vazios.push_back(a);
+		}
+		else {
+			ind_val.push_back(a);
+		}
+	}
 	//Find neighboring images
 
 	int currentCamera = 0, checkedCamera = 0, nMaxMatch = 0;
 	size_t frameInit = 0;
-	std::vector<vector<int>>indices_vizinhos;
-	indices_vizinhos.resize(imagens_src.size());
-	for (size_t frame0 = currentCamera; frame0 < imagens_src.size(); frame0++) {
+	std::vector<vector<int>>indices_vizinhos,ind_new;
+	indices_vizinhos.resize(imagens_src.size() - ind_vazios.size());
+	ind_new.resize(imagens_src.size() - ind_vazios.size());
+	for (size_t frame0 = currentCamera; frame0 < ind_val.size(); frame0++) {
 		frameInit = 0;
 
-		double angle;//angle between images
+		double angle = 0;//angle between images
 		if (frame0 == frameInit)frameInit = checkedCamera + 1;
 
-		for (size_t frame1 = frameInit; frame1 < imagens_src.size(); frame1++)
+		for (size_t frame1 = frameInit; frame1 < ind_val.size(); frame1++)
 		{
 
-			if (frame0 == frame1 && frame1 != imagens_src.size() - 1)frame1 = frame1 + 1;
-			if (frame0 == imagens_src.size() - 1 && frame1 == imagens_src.size() - 1)
+
+			if (frame0 == frame1 && frame1 != ind_val.size() - 1)frame1 = frame1 + 1;
+			if (frame0 == ind_val.size() - 1 && frame1 == ind_val.size() - 1)
 			{
 				break;
 			}
+			if (frame0 == ind_val.size() - 1 && frame1 == ind_val.size() - 1)
+			{
+				break;
+			}
+			
 
 			double product = 0;//Scalar product 
 			for (int i = 0; i < 3; i++) {
-				product = product + (pontos[frame0][i] * pontos[frame1][i]);
+				product = product + (pontos[ind_val[frame0]][i] * pontos[ind_val[frame1]][i]);
 
 			}
 			//modulos
-			double magA = pontos[frame0].norm();
-			double magB = pontos[frame1].norm();
+			double magA = pontos[ind_val[frame0]].norm();
+			double magB = pontos[ind_val[frame1]].norm();
 			angle = RAD2DEG(acos(product / (magA * magB))); // Angle
 
-			if (angle < 40)
+			if (angle < 35)
 			{
-				indices_vizinhos[frame0].push_back(frame1);
+				ind_new[frame0].push_back(frame1);
+				indices_vizinhos[frame0].push_back(ind_val[frame1]);
 
 			}
+
+
+
 		}
 	}
 
 	//Find Matches
-	auto start_time = std::chrono::high_resolution_clock::now();
+	/*auto start_time = std::chrono::high_resolution_clock::now();*/
 
 	// Ajustar matriz de quantidade de matches
 	Eigen::MatrixXi matches_count = Eigen::MatrixXi::Zero(descp_src.size() - 1, descp_src.size() - 1);
-	vector<vector<  vector<cv::DMatch> >> matriz_matches(descp_src.size());
+	vector<vector<  vector<cv::DMatch> >> matriz_matches(descp_src.size() - ind_vazios.size());
 	for (int i = 0; i < matriz_matches.size(); i++)
 		matriz_matches.at(i).resize(indices_vizinhos[i].size());
-	auto finish_time = std::chrono::high_resolution_clock::now();
+	/*auto finish_time = std::chrono::high_resolution_clock::now();
 	auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(finish_time - start_time).count() * 1e-9;
-	std::cout << "Matches " << time << "\n";
+	std::cout << "Matches " << time << "\n";*/
 
 	//Match pair of all images (Keypoints)
-	std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey = Utils::surf_matches_matrix_encontrar_melhor(matriz_matches, descp_src, kpts_src, imagens_src, indices_vizinhos);
+	std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey = Utils::surf_matches_matrix_encontrar_melhor(matriz_matches, descp_src, kpts_src, imagens_src, indices_vizinhos, ind_val);
 
 	float step_deg = 0.1; // [DEGREES]
 	int raios_360 = int(360.0 / step_deg), raios_180 = raios_360 / 2.0; // Quantos raios sairao do centro para formar 360 e 180 graus de um circulo 2D
 
 	//Size of final panoramic
 	cv::Mat im360 = cv::Mat::zeros(cv::Size(raios_360, raios_180), CV_8UC3); // Imagem 360 ao final de todas as fotos passadas sem blending 
-	
+
 	try
 	{
 		atexit(freeMemory);
-		argument = new Argument(argc, argv);
+		argument = new Argument(argc, argv, ind_val);
 		argument->Parse();
 
-		gwo = new GWO(argument->GetBenchmark(), argument->GetPopulationSize(), argument->GetIterations());
-		(void)gwo->Evaluate(argument->IsDebug(), bestKey, imagens_src, im360, indices_vizinhos);
-		
+		gwo = new GWO(argument->GetBenchmark(), argument->GetPopulationSize(), argument->GetIterations(), ind_vazios, ind_val);
+		(void)gwo->Evaluate(argument->IsDebug(), bestKey, imagens_src, im360, ind_new);
+
 		std::cout << "Result:" << std::endl
 			<< gwo << std::endl;
 

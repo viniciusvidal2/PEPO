@@ -19,6 +19,7 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "benchmark.hpp"
+#include "argument.hpp"
 #include <iostream>
 #include <string>
 #include <math.h>
@@ -50,13 +51,16 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 class fob : public Benchmark {
-    private:
-        const unsigned int variablesCount_m = 288 ;//dimension
-        Boundaries *boundaries_m;
+private:
+	static std::vector<int> i;
+	 int variablesCount_m = 246;//dimension
+	Boundaries *boundaries_m;
+	
 
-    public:
-		fob();
-        ~fob();
-        double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360,int rows, int cols, std::vector<std::vector<int>> indices);
-        static Benchmark *Create();
+
+public:
+	fob(std::vector<int> ind_val);
+	~fob();
+	double fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint>>> bestKey, std::vector<std::string> imagens_src, cv::Mat im360, int rows, int cols, std::vector<std::vector<int>> indices);
+	static Benchmark *Create(std::vector<int> ind_val);
 };

@@ -27,14 +27,17 @@
 
     class BenchmarkFactory {
         private:
+			
             BenchmarkFactory();
+			int i = 1;
             BenchmarkFactory(const BenchmarkFactory &) = default;
             BenchmarkFactory &operator=(const BenchmarkFactory &);
-            std::map<std::string, BenchmarkCreateMethod> factoryMap_m;
+            std::map<std::string, BenchmarkCreateMethod > factoryMap_m;
         public:
             ~BenchmarkFactory();
             static BenchmarkFactory *Get();
             void Register(const std::string &benchmarkName, BenchmarkCreateMethod benchmarkCreateMethod);
-            Benchmark *CreateBenchmark(const std::string &benchmarkName);
+            Benchmark *CreateBenchmark(const std::string &benchmarkName, std::vector<int> ind_val);
+			
     };
 #endif

@@ -45,7 +45,7 @@ public:
 	static float raw2deg(int raw, std::string motor);
 	static int deg2raw(double deg, std::string motor);
 	static void calcular_features_surf(std::vector<cv::Mat>  &descp_src, std::vector<std::vector<cv::KeyPoint> >  &kpts_src, std::vector<std::string> imagens_src);
-	static std::vector<std::vector<std::vector<cv::KeyPoint>>> surf_matches_matrix_encontrar_melhor(std::vector<std::vector<  std::vector<cv::DMatch> >> matriz_matches, std::vector<cv::Mat>  descp_src, std::vector< std::vector<cv::KeyPoint> >  kpts_src, std::vector<std::string> imagens_src, std::vector<std::vector<int>> &indices);
+	static std::vector<std::vector<std::vector<cv::KeyPoint>>> surf_matches_matrix_encontrar_melhor(std::vector<std::vector<  std::vector<cv::DMatch> >> matriz_matches, std::vector<cv::Mat>  descp_src, std::vector< std::vector<cv::KeyPoint> >  kpts_src, std::vector<std::string> imagens_src, std::vector<std::vector<int>> &indices, std::vector<int> ind_vazios);
 	static void filtrar_matches_keypoints_repetidos(std::vector<cv::KeyPoint> &kt, std::vector<cv::KeyPoint> &ks, std::vector<cv::DMatch> &m);
 	static Eigen::Vector3d pointAngle(std::vector<int> pose, double R, Eigen::Vector2f center, int cols, int rows, Eigen::Vector2f foco);
 };

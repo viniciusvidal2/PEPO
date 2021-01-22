@@ -19,25 +19,26 @@
 //  along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef __ARGUMENT_H
-    #define __ARGUMENT_H
-    #include "benchmark.hpp"
+#define __ARGUMENT_H
+#include "benchmark.hpp"
 
-    class Argument {
-        private:
-            int argc_m;
-            char **argv_m;
-            unsigned int populationSize_m;
-            unsigned int iterations_m;
-            Benchmark *benchmark_m;
-            bool debug_m;
-            void ShowUsage();
-        public:
-            Argument(int argc, char **argv);
-            ~Argument();
-            void Parse();
-            unsigned int GetPopulationSize();
-            unsigned int GetIterations();
-            Benchmark *GetBenchmark();
-            bool IsDebug();
-    };
+class Argument {
+private:
+	int argc_m;
+	char **argv_m;
+	std::vector<int> indices_validos;
+	unsigned int populationSize_m;
+	unsigned int iterations_m;
+	Benchmark *benchmark_m;
+	bool debug_m;
+	void ShowUsage();
+public:
+	Argument(int argc, char **argv, std::vector<int> ind_val);
+	~Argument();
+	void Parse();
+	unsigned int GetPopulationSize();
+	unsigned int GetIterations();
+	Benchmark *GetBenchmark();
+	bool IsDebug();
+};
 #endif

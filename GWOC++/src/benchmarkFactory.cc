@@ -28,38 +28,45 @@
 //#include "benchmark/f7.hpp"
 #include "benchmark/fob.hpp"
 BenchmarkFactory::BenchmarkFactory() {
-    //Register("F1", &F1::Create);
-    //Register("F2", &F2::Create);
-    //Register("F3", &F3::Create);
-    //Register("F4", &F4::Create);
-    //Register("F5", &F5::Create);
-    //Register("F6", &F6::Create);
-    //Register("F7", &F7::Create);
-	Register("fob", &fob::Create);
+	//Register("F1", &F1::Create);
+	//Register("F2", &F2::Create);
+	//Register("F3", &F3::Create);
+	//Register("F4", &F4::Create);
+	//Register("F5", &F5::Create);
+	//Register("F6", &F6::Create);
+	//Register("F7", &F7::Create);
+	
+	int teste;
+	//Register("fob", &fob::Create);
 }
 
-BenchmarkFactory::~BenchmarkFactory() { 
-    factoryMap_m.clear(); 
+BenchmarkFactory::~BenchmarkFactory() {
+	factoryMap_m.clear();
 }
 
 BenchmarkFactory *BenchmarkFactory::Get() {
-    static BenchmarkFactory instance;
-    return &instance;
+	static BenchmarkFactory instance;
+	return &instance;
 }
 
-BenchmarkFactory & BenchmarkFactory::operator=(const BenchmarkFactory &) { 
-    return *this; 
+BenchmarkFactory & BenchmarkFactory::operator=(const BenchmarkFactory &) {
+	return *this;
 }
 
-void BenchmarkFactory::Register(const std::string &benchmarkName, 
-                                BenchmarkCreateMethod benchmarkCreateMethod) {
-    factoryMap_m[benchmarkName] = benchmarkCreateMethod;
+void BenchmarkFactory::Register(const std::string &benchmarkName,
+	BenchmarkCreateMethod benchmarkCreateMethod) {
+	factoryMap_m[benchmarkName] = benchmarkCreateMethod;
+	
 }
 
-Benchmark* BenchmarkFactory::CreateBenchmark(const std::string &benchmarkName) {
-    auto it = factoryMap_m.find(benchmarkName);
-    if(it != factoryMap_m.end()) {
-        return it->second();
-    }
-    return nullptr;
+Benchmark* BenchmarkFactory::CreateBenchmark(const std::string &benchmarkName, std::vector<int> ind_val) {
+	/*auto it = factoryMap_m.find(benchmarkName);
+	if (it != factoryMap_m.end()) {
+		
+		return it->second();
+	}
+	
+	return nullptr;*/
+	
+	return fob::Create(ind_val);
 }
