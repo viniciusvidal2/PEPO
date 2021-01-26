@@ -230,16 +230,16 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 				int frame1 = indices[frame0][l];
 				//Sorteando os keypoints para pegar apenas a metade para diminuir um pouco o tempo computacional
 				/*std::random_shuffle(kpts1.begin(), kpts1.end());
-				std::random_shuffle(kpts2.begin(), kpts2.end());*/
-#pragma omp parallel for 
+//				std::random_shuffle(kpts2.begin(), kpts2.end());*/
+//#pragma omp parallel for 
 				for (int k = 0; k < kpts1.size(); k++)
 				{
 
 					cv::KeyPoint kp1 = kpts1[k];
 					cv::KeyPoint kp2 = kpts2[k];
-
+					
 					double dx1 = x[frame0 * 6 + 4] - double(cols) / 2, dy1 = x[frame0 * 6 + 5] - double(rows) / 2;
-
+					
 					double maxX = (float(cols) - 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
 					double minX = (float(cols) + 2 * dx1) / (2.0 * x[frame0 * 6 + 2]);
 					double maxY = (float(rows) - 2 * dy1) / (2.0 * x[frame0 * 6 + 3]);
@@ -256,9 +256,11 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 					Eigen::Vector3d ponto3d;
 					// Conta aberta - = p5 + (p4 - p5) * kp1.pt.x / cols + (p2 - p5) * kp1.pt.y / rows;
 					ponto3d << minX + (maxX - minX)*(kp1.pt.x / cols), maxY + (minY - maxY)*(kp1.pt.y / rows), F;
+					
 					// Latitude e longitude no 360
 					double lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())), lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
 					lon = (lon < 0) ? lon += 360.0 : lon;
+				
 					lat = lat - DEG2RAD(Utils::raw2deg(x[frame0 * 6 + 1], "tilt"));
 					lon = lon + DEG2RAD(Utils::raw2deg(x[frame0 * 6], "pan"));
 
@@ -269,6 +271,7 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 					v = (v < 0) ? 0 : v;
 					// Ponto na imagem 360 devido a camera 1, finalmente apos as contas, armazenar
 					Eigen::Vector2d ponto_fc1{ u, v };
+				//	std::cout << "pto 3D 1 : " << ponto_fc1<<std::endl;
 					ponto_fc1.normalize();
 
 					// ------------------------------------------------------------------------------------------------
@@ -293,11 +296,11 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 					//ponto3d = p5 + (p4 - p5) * kp2.pt.x / cols + (p2 - p5) * kp2.pt.y / rows;
 					//conta aberta - teste
 					ponto3d << minX + (maxX - minX)*(kp2.pt.x / cols), maxY + (minY - maxY)*(kp2.pt.y / rows), F;
-
+					
 					// Latitude e longitude no 360
 					lat = 180 / 3.1415 * (acos(ponto3d[1] / ponto3d.norm())); lon = -180 / 3.1415 * (atan2(ponto3d[2], ponto3d[0]));
 					lon = (lon < 0) ? lon += 360.0 : lon;
-				
+					double teste = x[frame1 * 6 + 1];
 					lat = lat - DEG2RAD(Utils::raw2deg(x[frame1 * 6 + 1], "tilt"));
 					lon = lon + DEG2RAD(Utils::raw2deg(x[frame1 * 6], "pan"));
 					u = int(lon / step_deg); v = im360.rows - 1 - int(lat / step_deg);
@@ -307,8 +310,9 @@ double fob::fitness(double x[], std::vector<std::vector<std::vector<cv::KeyPoint
 					v = (v < 0) ? 0 : v;
 					// Ponto na imagem 360 devido a camera 2, finalmente apos as contas, armazenar
 					Eigen::Vector2d ponto_fc2{ u, v };
+					//std::cout << "pto 3D 2 : " << ponto_fc2 << std::endl;
 					ponto_fc2.normalize();
-
+					
 					/// RESULTADO FINAL, para ir formando a FOB, com o somatorio do erro entre os pontos
 
 					erro[frame0] = erro[frame0] + ((ponto_fc1 - ponto_fc2).norm());

@@ -27,7 +27,8 @@ Boundary_no= size(ub,2); % numnber of boundaries
 if Boundary_no==1
     Positions=rand(SearchAgents_no,dim).*(ub-lb)+lb;
 end
-ini = [1427.099976, 1449.400024, 987.900024, 579.400024, 1427.099976, 1449.400024, 987.900024, 579.400024,roll(2,1),yaw(2,1),pitch(2,1), roll(7,1),  yaw(7,1),pitch(7,1)]';
+% ini = [1427.099976, 1449.400024, 987.900024, 579.400024, 1427.099976, 1449.400024, 987.900024, 579.400024, roll(7,1),  yaw(7,1),pitch(7,1),roll(10,1),yaw(10,1),pitch(10,1)]';
+ini = [1427.099976, 1449.400024, 987.900024, 579.400024, 1427.099976, 1449.400024, 987.900024, 579.400024,1427.099976, 1449.400024, 987.900024, 579.400024,  yaw(2,1),pitch(2,1),yaw(7,1),pitch(7,1),yaw(10,1),pitch(10,1)]';
 % If each variable has a different lb and ub
  Positions(1,:)=ini ;
 if Boundary_no>1

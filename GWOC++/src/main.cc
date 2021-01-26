@@ -56,7 +56,7 @@ void freeMemory() {
 }
 
 int main(int argc, char **argv) {
-	char* arguments[] = { "--dir", "-name","fob","-population_size","35","-iterations","100","-debug","true" };
+	char* arguments[] = { "--dir", "-name","fob","-population_size","30","-iterations","10","-debug","true" };
 
 	argv = arguments;
 	argc = sizeof(arguments) / sizeof(arguments[0]) - 1;

@@ -37,9 +37,9 @@ tic
 
 SearchAgents_no = 30; % Number of search agents
 
-Function_name = 'Fob'; % Name of the test function that can be from F1 to F23 (Table 1,2,3 in the paper)
+Function_name = 'Fob2'; % Name of the test function that can be from F1 to F23 (Table 1,2,3 in the paper)
 
-Max_iteration = 200; % Maximum numbef of iterations
+Max_iteration = 1000; % Maximum numbef of iterations
 
 % roll, pitch , yaw txt file
 pose = load('C:/dataset3/pose.txt');
@@ -80,11 +80,11 @@ grid on
 box on
 legend('GWO')
 
-display(['The best solution obtained by GWO is : ', num2str(Best_pos)]);
-display(['The best optimal value of the objective funciton found by GWO is : ', num2str(Best_score)]);
-fid = fopen('C:/dataset3/cam.txt','wt');
-fprintf(fid, '%s %s %s %s %s %s %s %s %s %s %s %s %s %s',num2str(Best_pos(9)), num2str(Best_pos(10)), num2str(Best_pos(11)),num2str(Best_pos(1)),num2str(Best_pos(2)),num2str(Best_pos(3)),num2str(Best_pos(12)),num2str(Best_pos(13)),num2str(Best_pos(14)),num2str(Best_pos(4)),num2str(Best_pos(5)),num2str(Best_pos(6)),num2str(Best_pos(7)));
-fclose(fid);
+% display(['The best solution obtained by GWO is : ', num2str(Best_pos)]);
+% display(['The best optimal value of the objective funciton found by GWO is : ', num2str(Best_score)]);
+% fid = fopen('C:/dataset3/cam.txt','wt');
+% fprintf(fid, '0 %s %s %s %s %s %s \n 0 %s %s %s %s %s %s', num2str(Best_pos(10)), num2str(Best_pos(9)),num2str(Best_pos(1)),num2str(Best_pos(2)),num2str(Best_pos(3)),num2str(Best_pos(4)),num2str(Best_pos(12)),num2str(Best_pos(11)),num2str(Best_pos(5)),num2str(Best_pos(6)),num2str(Best_pos(7)),num2str(Best_pos(8)));
+% fclose(fid);
   toc      
 
 

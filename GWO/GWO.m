@@ -22,23 +22,24 @@ function [Alpha_score,Alpha_pos,Convergence_curve] = GWO(SearchAgents_no,Max_ite
 
 
 %read images
-image1 = imread('C:/dataset3/teste/00.png');
-image2 = imread('C:/dataset3/teste/01.png');
+image1 = imread('C:/PEPO/GWO/images/00.png');
+image2 = imread('C:/PEPO/GWO/images/01.png');
+
 % image 360
 step_deg = 0.1;
 raios_360 = (360.0 / step_deg); raios_180 = raios_360 / 2.0;
 im360 = zeros(raios_180,raios_360,3,'uint8');
 
 % roll, pitch , yaw txt file
-pose = load('C:/dataset3/pose.txt');
+pose = load('C:/PEPO/GWO/files/pose.txt');
 sz = size(pose);
 
 
 % matches between image1 and image 2 - trainIdx and queryIdx
-matches = load('C:/dataset3/matches.txt');
+matches = load('C:/PEPO/GWO/files/matches.txt');
 %keypoints - image1 and image2 - (x,y)
-kpt1 = load('C:/dataset3/keypt1.txt');
-kpt2 = load('C:/dataset3/keypt2.txt');
+kpt1 = load('C:/PEPO/GWO/files/keypt1.txt');
+kpt2 = load('C:/PEPO/GWO/files/keypt2.txt');
 
 
 % initialize alpha, beta, and delta_pos
