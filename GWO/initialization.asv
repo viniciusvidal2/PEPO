@@ -18,7 +18,7 @@
 %___________________________________________________________________%
 
 % This function initialize the first population of search agents
-function Positions=initialization(SearchAgents_no,dim,ub,lb,pitch, yaw)
+function Positions=initialization(SearchAgents_no,dim,ub,lb,roll,pitch, yaw)
 
 Boundary_no= size(ub,2); % numnber of boundaries
 
@@ -27,7 +27,6 @@ Boundary_no= size(ub,2); % numnber of boundaries
 if Boundary_no==1
     Positions=rand(SearchAgents_no,dim).*(ub-lb)+lb;
 end
-%Inicializando o primeiro agente com os valores vindos do robô
 ini = [1427.099976, 1449.400024, 987.900024, 579.400024,1427.099976, 1449.400024, 987.900024, 579.400024,  yaw(2,1),pitch(2,1),yaw(7,1),pitch(7,1)]';
 % If each variable has a different lb and ub
  Positions(1,:)=ini ;

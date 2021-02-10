@@ -18,7 +18,7 @@
 %___________________________________________________________________%
 
 % Grey Wolf Optimizer
-function [Alpha_score,Alpha_pos,Convergence_curve] = GWO(SearchAgents_no,Max_iter,lb,ub,dim,fobj,roll,pitch,yaw)
+function [Alpha_score,Alpha_pos,Convergence_curve] = GWO(SearchAgents_no,Max_iter,lb,ub,dim,fobj,pitch,yaw)
 
 
 %read images
@@ -53,7 +53,7 @@ Delta_pos = zeros(1,dim);
 Delta_score = inf; %change this to -inf for maximization problems
 
 %Initialize the positions of search agents
-Positions = initialization(SearchAgents_no,dim,ub,lb,roll,pitch, yaw);
+Positions = initialization(SearchAgents_no,dim,ub,lb,pitch, yaw);
 
 Convergence_curve = zeros(1,Max_iter);
 

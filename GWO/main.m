@@ -17,7 +17,7 @@
 %                                                                   %
 %___________________________________________________________________%
 
-% You can simply define your cost in a seperate file and load its handle to fobj 
+% You can simply define your cost in a seperate file and load its handle to fobj
 % The initial parameters that you need are:
 %__________________________________________
 % fobj = @YourCostFunction
@@ -54,12 +54,10 @@ for j=1:sz(1)
     yaw(j,:) = pose(j,3);
 end
 
-
-
 % Load details of the selected benchmark function
-[lb,ub,dim,fobj] = Get_Functions_details(Function_name,roll,pitch,yaw);
+[lb,ub,dim,fobj] = Get_Functions_details(Function_name,pitch,yaw);
 
-[Best_score,Best_pos,GWO_cg_curve] = GWO(SearchAgents_no,Max_iteration,lb,ub,dim,fobj,roll,pitch,yaw);
+[Best_score,Best_pos,GWO_cg_curve] = GWO(SearchAgents_no,Max_iteration,lb,ub,dim,fobj,pitch,yaw);
 
 figure('Position',[500 500 660 290])
 %Draw search space
@@ -80,12 +78,10 @@ grid on
 box on
 legend('GWO')
 
-% display(['The best solution obtained by GWO is : ', num2str(Best_pos)]);
-% display(['The best optimal value of the objective funciton found by GWO is : ', num2str(Best_score)]);
-% fid = fopen('C:/dataset3/cam.txt','wt');
-% fprintf(fid, '0 %s %s %s %s %s %s \n 0 %s %s %s %s %s %s', num2str(Best_pos(10)), num2str(Best_pos(9)),num2str(Best_pos(1)),num2str(Best_pos(2)),num2str(Best_pos(3)),num2str(Best_pos(4)),num2str(Best_pos(12)),num2str(Best_pos(11)),num2str(Best_pos(5)),num2str(Best_pos(6)),num2str(Best_pos(7)),num2str(Best_pos(8)));
-% fclose(fid);
-  toc      
+display(['The best solution obtained by GWO is : ', num2str(Best_pos)]);
+display(['The best optimal value of the objective funciton found by GWO is : ', num2str(Best_score)]);
+
+toc
 
 
 
