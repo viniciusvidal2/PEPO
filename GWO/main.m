@@ -37,27 +37,18 @@ tic
 
 SearchAgents_no = 30; % Number of search agents
 
-Function_name = 'Fob2'; % Name of the test function that can be from F1 to F23 (Table 1,2,3 in the paper)
+Function_name = 'Fob'; % Name of the test function that can be from F1 to F23 (Table 1,2,3 in the paper)
 
 Max_iteration = 1000; % Maximum numbef of iterations
 
-% roll, pitch , yaw txt file
-pose = load('C:/dataset3/pose.txt');
-sz = size(pose);
+% Posição de cada imagem - Tilt(Vertical) e pan(Horizontal) 
+pose = position();
 
-roll = zeros(sz(1),1);
-pitch = zeros(sz(1),1);
-yaw = zeros(sz(1),1);
-for j=1:sz(1)
-    roll(j,:) = pose(j,1);
-    pitch(j,:) = pose(j,2);
-    yaw(j,:) = pose(j,3);
-end
 
 % Load details of the selected benchmark function
-[lb,ub,dim,fobj] = Get_Functions_details(Function_name,pitch,yaw);
+[lb,ub,dim,fobj] = Get_Functions_details(Function_name,pose);
 
-[Best_score,Best_pos,GWO_cg_curve] = GWO(SearchAgents_no,Max_iteration,lb,ub,dim,fobj,pitch,yaw);
+[Best_score,Best_pos,GWO_cg_curve] = GWO(SearchAgents_no,Max_iteration,lb,ub,dim,fobj);
 
 figure('Position',[500 500 660 290])
 %Draw search space
@@ -77,7 +68,40 @@ axis tight
 grid on
 box on
 legend('GWO')
+im360 = zeros(180/0.1, 360/0.1, 3);
 
+
+%%Plot imagens - Posição otimizada
+t = size(Best_pos,2);
+nomes_imagens = cell(1, length(2));
+nomes_imagens{1} = 'C:/dataset3/imagem_008.png';
+nomes_imagens{2} = 'C:/dataset3/imagem_003.png';
+nomes_imagens{3} = 'C:/dataset3/imagem_013.png';
+im = im360;
+l=1;
+for j = 1:2:t
+    
+   im = dothething(Best_pos(j),Best_pos(j+1),double(imread(nomes_imagens{l}))/255,im);
+   
+  l=l+1;
+end
+    
+figure,imshow(im)
+title('Otimizado');
+%% Plot imagem - Posição original - Vinda do Robô
+nomes_imagens{1} = 'C:/dataset3/imagem_003.png';
+nomes_imagens{2} = 'C:/dataset3/imagem_008.png';
+nomes_imagens{3} = 'C:/dataset3/imagem_013.png';
+imoriginal= zeros(180/0.1, 360/0.1, 3);
+l=1;
+for j = 3:5:13
+    
+   imoriginal = dothething(pose(j,1),pose(j,2),double(imread(nomes_imagens{l}))/255,imoriginal);
+   
+  l=l+1;
+end
+figure,imshow(imoriginal)
+title('Original');
 display(['The best solution obtained by GWO is : ', num2str(Best_pos)]);
 display(['The best optimal value of the objective funciton found by GWO is : ', num2str(Best_score)]);
 

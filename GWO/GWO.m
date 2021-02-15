@@ -18,30 +18,74 @@
 %___________________________________________________________________%
 
 % Grey Wolf Optimizer
-function [Alpha_score,Alpha_pos,Convergence_curve] = GWO(SearchAgents_no,Max_iter,lb,ub,dim,fobj,pitch,yaw)
+function [Alpha_score,Alpha_pos,Convergence_curve] = GWO(SearchAgents_no,Max_iter,lb,ub,dim,fobj)
+%% Ler as imagens
+% Pegando os nomes das imagens 
+pose = position();%Posição tilt e pan de cada imagem (tilt - vertical, pan - horizontal)
+nomes_imagens = cell(1, length(pose));
+for n=1:length(pose)
+    if n < 10
+        nome = ['C:/dataset3/imagem_00',num2str(n),'.png'];
+    else
+        nome = ['C:/dataset3/imagem_0',num2str(n),'.png'];
+    end
+    nomes_imagens{n} = nome;
+end
 
 
-%read images
-image1 = imread('C:/PEPO/GWO/images/00.png');
-image2 = imread('C:/PEPO/GWO/images/01.png');
-
-% image 360
-step_deg = 0.1;
-raios_360 = (360.0 / step_deg); raios_180 = raios_360 / 2.0;
-im360 = zeros(raios_180,raios_360,3,'uint8');
-
-% roll, pitch , yaw txt file
-pose = load('C:/PEPO/GWO/files/pose.txt');
-sz = size(pose);
+% Ler imagem em double - Pegando 3 imagens
+im2 = double(imread(nomes_imagens{3}))/255;
+im3 = double(imread(nomes_imagens{8}))/255;
+im4 = double(imread(nomes_imagens{13}))/255;
 
 
-% matches between image1 and image 2 - trainIdx and queryIdx
-matches = load('C:/PEPO/GWO/files/matches.txt');
-%keypoints - image1 and image2 - (x,y)
-kpt1 = load('C:/PEPO/GWO/files/keypt1.txt');
-kpt2 = load('C:/PEPO/GWO/files/keypt2.txt');
+step_deg = 0.1;%step em graus para determinar tamanho da imagem 360 final
+%Criando a imagem 360 final
+im360 = zeros(180/step_deg, 360/step_deg, 3);
+
+%Detectar features points com SURF 
+points2 = detectSURFFeatures(rgb2gray(im2));
+points3 = detectSURFFeatures(rgb2gray(im3));
+points4 = detectSURFFeatures(rgb2gray(im4));
+
+[features2,valid_points2] = extractFeatures(rgb2gray(im2),points2);
+[features3,valid_points3] = extractFeatures(rgb2gray(im3),points3);
+[features4,valid_points4] = extractFeatures(rgb2gray(im4),points4);
 
 
+% Match - Encontrando Matches entre imagens
+%Considerando Imagem 8 como referencia e pegando as vizinhas 2 e 13 e
+%encontrando os matches entre elas
+[indexPairs1, matchmetric1] =   matchFeatures(features3, features2);
+[indexPairs2, matchmetric2] =   matchFeatures(features3, features4);
+
+matchedPoints3_2 = valid_points3(indexPairs1(:,1),:);
+matchedPoints2 = valid_points2(indexPairs1(:,2),:);
+
+matchedPoints3_4 = valid_points3(indexPairs2(:,1),:);
+matchedPoints4 = valid_points4(indexPairs2(:,2),:);
+
+% Filtrar matches-  Pegando x melhores matches para tornar o coidgo mais
+% rapido
+[~, bests1] = sort(matchmetric1);
+[~, bests2] = sort(matchmetric2);
+melhores = 30;
+matchedPoints3_2 = matchedPoints3_2(bests1(1:melhores));
+matchedPoints2 = matchedPoints2(bests1(1:melhores));
+
+matchedPoints3_4 = matchedPoints3_4(bests2(1:melhores));
+matchedPoints4 = matchedPoints4(bests2(1:melhores));
+
+
+%% Pontos de feature para ver erro
+features_referencia3_4 = [matchedPoints3_4.Location'; ones(1, size(matchedPoints3_4.Location, 1))];
+features_esquerda   = [matchedPoints4.Location'; ones(1, size(matchedPoints4.Location, 1))];
+
+features_referencia3_2 = [matchedPoints3_2.Location'; ones(1, size(matchedPoints3_2.Location, 1))];
+features_direita   = [matchedPoints2.Location'; ones(1, size(matchedPoints2.Location, 1))];
+
+features_referencia = [features_referencia3_2',features_referencia3_4'];
+features_vizinhos = [features_direita',features_esquerda'];
 % initialize alpha, beta, and delta_pos
 Alpha_pos=zeros(1,dim);
 Alpha_score = inf; %change this to -inf for maximization problems
@@ -53,7 +97,7 @@ Delta_pos = zeros(1,dim);
 Delta_score = inf; %change this to -inf for maximization problems
 
 %Initialize the positions of search agents
-Positions = initialization(SearchAgents_no,dim,ub,lb,pitch, yaw);
+Positions = initialization(SearchAgents_no,dim,ub,lb,pose);
 
 Convergence_curve = zeros(1,Max_iter);
 
@@ -86,7 +130,7 @@ while l<Max_iter
         
 
         % Calculate objective function for each search agent
-        fitness = fobj(Positions(i,:),matches,kpt1,kpt2,image1,image2,im360);
+        fitness = fobj(Positions(i,:),features_referencia,features_vizinhos);
         
         % Update Alpha, Beta, and Delta
         if fitness < Alpha_score
