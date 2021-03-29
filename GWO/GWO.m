@@ -69,7 +69,7 @@ matchedPoints4 = valid_points4(indexPairs2(:,2),:);
 % rapido
 [~, bests1] = sort(matchmetric1);
 [~, bests2] = sort(matchmetric2);
-melhores = 30;
+melhores = 2;
 matchedPoints3_2 = matchedPoints3_2(bests1(1:melhores));
 matchedPoints2 = matchedPoints2(bests1(1:melhores));
 
