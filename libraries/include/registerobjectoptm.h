@@ -36,7 +36,7 @@
 #include <opencv2/core/eigen.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/features2d.hpp>
-#include <opencv2/xfeatures2d.hpp>
+//#include <opencv2/xfeatures2d.hpp>
 
 #include <Eigen/Geometry>
 #include <Eigen/Dense>
@@ -61,12 +61,12 @@ public:
     virtual ~RegisterObjectOptm();
     void readCloudAndPreProcess(string name, PointCloud<PointT>::Ptr cloud);
     Matrix4f icp(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
-    Matrix4f gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
-    void matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow,
-                                      PointCloud<PointTN>::Ptr cmr, PointCloud<PointTN>::Ptr cmn);
-    Matrix4f optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow);
+//    Matrix4f gicp6d(PointCloud<PointTN>::Ptr ctgt, PointCloud<PointTN>::Ptr csrc, float vs, int its);
+//    void matchFeaturesAndFind3DPoints(Mat imref, Mat imnow, PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow,
+//                                      PointCloud<PointTN>::Ptr cmr, PointCloud<PointTN>::Ptr cmn);
+//    Matrix4f optmizeTransformSVD(PointCloud<PointTN>::Ptr cref, PointCloud<PointTN>::Ptr cnow);
     void searchNeighborsKdTree(PointCloud<PointTN>::Ptr cnow, PointCloud<PointTN>::Ptr cobj, float radius, float rate);
-    void readNVM(string folder, string nome, vector<string> &clouds, vector<string> &images, vector<Matrix4f> &poses, float &foco);
+//    void readNVM(string folder, string nome, vector<string> &clouds, vector<string> &images, vector<Matrix4f> &poses, float &foco);
 
 };
 
